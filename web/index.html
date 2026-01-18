@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Telegram QR Scanner</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      background: var(--tg-theme-bg-color, #f5f5f5);
+      color: var(--tg-theme-text-color, #222);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    body {
+      margin: 0;
+      padding: 16px;
+    }
+    h1 {
+      font-size: 20px;
+      margin: 0 0 12px;
+    }
+    .card {
+      background: var(--tg-theme-secondary-bg-color, #fff);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 12px;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+    }
+    button {
+      background: var(--tg-theme-button-color, #2ea6ff);
+      color: var(--tg-theme-button-text-color, #fff);
+      border: none;
+      padding: 10px 16px;
+      border-radius: 10px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .history-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    }
+    .history-item:last-child {
+      border-bottom: none;
+    }
+    .tag {
+      font-size: 12px;
+      color: var(--tg-theme-hint-color, #666);
+    }
+    .muted {
+      color: var(--tg-theme-hint-color, #666);
+      font-size: 14px;
+    }
+    .details-grid {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    }
+    .detail {
+      background: rgba(0, 0, 0, 0.03);
+      border-radius: 8px;
+      padding: 8px;
+      word-break: break-word;
+    }
+  </style>
+</head>
+<body>
+  <h1>QR Scanner</h1>
+
+  <div id="not-telegram" class="card" style="display: none;">
+    <strong>Open this Mini App inside Telegram.</strong>
+    <p class="muted">The QR scanner relies on Telegram WebApp APIs.</p>
+  </div>
+
+  <div class="card">
+    <button id="scan-button">Scan QR</button>
+    <button id="find-check-button" disabled>Find check</button>
+    <button id="save-check-button" disabled>Save data</button>
+    <div class="toggle">
+      <input type="checkbox" id="continuous" />
+      <label for="continuous">Continuous scan</label>
+    </div>
+    <p class="muted" id="scan-status">Ready to scan.</p>
+    <div id="last-scan" class="muted"></div>
+    <pre id="check-preview" class="muted" style="display: none;"></pre>
+  </div>
+
+  <div class="card">
+    <h2>History</h2>
+    <div id="history" class="muted">Loading...</div>
+  </div>
+
+  <div class="card">
+    <h2>Details</h2>
+    <div id="details" class="muted">Select a scan to view details.</div>
+  </div>
+
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script>
+    const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+    const notTelegramEl = document.getElementById("not-telegram");
+    const scanButton = document.getElementById("scan-button");
+    const scanStatus = document.getElementById("scan-status");
+    const lastScanEl = document.getElementById("last-scan");
+    const findCheckButton = document.getElementById("find-check-button");
+    const saveCheckButton = document.getElementById("save-check-button");
+    const checkPreview = document.getElementById("check-preview");
+    const historyEl = document.getElementById("history");
+    const detailsEl = document.getElementById("details");
+    const continuousToggle = document.getElementById("continuous");
+
+    const state = {
+      userId: null,
+      scans: [],
+      lastText: null,
+      lastTextAt: 0,
+      lastScanUrl: null,
+      fetchedCheck: null,
+    };
+
+    const apiBase = new URLSearchParams(window.location.search).get("api") || window.location.origin;
+
+    function setStatus(message) {
+      scanStatus.textContent = message;
+    }
+
+    function renderHistory() {
+      if (!state.scans.length) {
+        historyEl.textContent = "No scans yet.";
+        return;
+      }
+      historyEl.innerHTML = "";
+      state.scans.forEach((scan) => {
+        const row = document.createElement("div");
+        row.className = "history-item";
+
+        const left = document.createElement("div");
+        left.innerHTML = `<div>${escapeHtml(scan.raw_text.slice(0, 40))}</div><div class="tag">${scan.type}</div>`;
+
+        const right = document.createElement("button");
+        right.textContent = "View";
+        right.addEventListener("click", () => showDetails(scan));
+
+        row.appendChild(left);
+        row.appendChild(right);
+        historyEl.appendChild(row);
+      });
+    }
+
+    function showDetails(scan) {
+      if (!scan) {
+        detailsEl.textContent = "Select a scan to view details.";
+        return;
+      }
+      const infoEntries = Object.entries(scan.info || {});
+      const infoGrid = infoEntries.length
+        ? infoEntries.map(([key, value]) => {
+            const safeValue = Array.isArray(value) ? value.join(", ") : String(value);
+            return `<div class="detail"><strong>${escapeHtml(key)}</strong><div>${escapeHtml(safeValue)}</div></div>`;
+          }).join("")
+        : "<div class=\"muted\">No structured data.</div>";
+
+      detailsEl.innerHTML = `
+        <div class="tag">${scan.type}</div>
+        <div><strong>Raw:</strong> ${escapeHtml(scan.raw_text)}</div>
+        <div><strong>Scanned:</strong> ${new Date(scan.created_at).toLocaleString()}</div>
+        <div class="details-grid">${infoGrid}</div>
+      `;
+    }
+
+    function escapeHtml(value) {
+      return value
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    async function fetchHistory() {
+      if (!state.userId) {
+        historyEl.textContent = "Connect Telegram to view history.";
+        return;
+      }
+      try {
+        const response = await fetch(`${apiBase}/api/history?user_id=${state.userId}`);
+        if (!response.ok) {
+          throw new Error("Failed to load history");
+        }
+        state.scans = await response.json();
+        renderHistory();
+      } catch (error) {
+        historyEl.textContent = "Unable to load history.";
+      }
+    }
+
+    async function submitScan(rawText) {
+      lastScanEl.textContent = `Latest: ${rawText}`;
+      resetCheckState();
+      if (rawText.length > 4096) {
+        setStatus("QR text too long.");
+        return;
+      }
+      if (!state.userId) {
+        setStatus("Missing Telegram user info.");
+        return;
+      }
+      const checkUrl = getValidCheckUrl(rawText);
+      if (checkUrl) {
+        state.lastScanUrl = checkUrl;
+        findCheckButton.disabled = false;
+      } else {
+        findCheckButton.disabled = true;
+      }
+      try {
+        const response = await fetch(`${apiBase}/api/scan`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            raw_text: rawText,
+            tg_user_id: state.userId,
+            timestamp: new Date().toISOString(),
+          }),
+        });
+        if (!response.ok) {
+          throw new Error("Failed to store scan");
+        }
+        const scan = await response.json();
+        state.scans = [scan, ...state.scans.filter((item) => item.id !== scan.id)];
+        renderHistory();
+        showDetails(scan);
+        setStatus("Scan stored.");
+      } catch (error) {
+        setStatus("Failed to store scan.");
+      }
+    }
+
+    function handleQrText(rawText) {
+      const now = Date.now();
+      if (continuousToggle.checked && rawText === state.lastText && now - state.lastTextAt < 2000) {
+        return;
+      }
+      state.lastText = rawText;
+      state.lastTextAt = now;
+      setStatus("QR detected.");
+      if (tg && tg.HapticFeedback) {
+        tg.HapticFeedback.notificationOccurred("success");
+      }
+      submitScan(rawText);
+      if (tg) {
+        tg.sendData(rawText);
+      }
+      if (!continuousToggle.checked && tg && tg.closeScanQrPopup) {
+        tg.closeScanQrPopup();
+      }
+    }
+
+    function resetCheckState() {
+      checkPreview.style.display = "none";
+      checkPreview.textContent = "";
+      saveCheckButton.disabled = true;
+      state.fetchedCheck = null;
+    }
+
+    function getValidCheckUrl(rawText) {
+      try {
+        const url = new URL(rawText);
+        if (url.hostname !== "cabinet.tax.gov.ua") {
+          return null;
+        }
+        if (url.pathname !== "/cashregs/check") {
+          return null;
+        }
+        const required = ["fn", "id", "sm", "time", "date"];
+        const hasAll = required.every((key) => url.searchParams.get(key));
+        return hasAll ? url.toString() : null;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    async function findCheck() {
+      if (!state.lastScanUrl || !state.userId) {
+        setStatus("Missing check URL.");
+        return;
+      }
+      setStatus("Finding check...");
+      findCheckButton.disabled = true;
+      try {
+        const response = await fetch(`${apiBase}/api/find_check`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tg_user_id: state.userId,
+            check_url: state.lastScanUrl,
+          }),
+        });
+        if (!response.ok) {
+          throw new Error("Failed to fetch check");
+        }
+        const data = await response.json();
+        state.fetchedCheck = data;
+        checkPreview.textContent = data.text || "";
+        checkPreview.style.display = "block";
+        saveCheckButton.disabled = false;
+        setStatus("Check found.");
+      } catch (error) {
+        setStatus("Failed to find check.");
+        findCheckButton.disabled = false;
+      }
+    }
+
+    async function saveCheck() {
+      if (!state.fetchedCheck || !state.lastScanUrl || !state.userId) {
+        setStatus("Nothing to save.");
+        return;
+      }
+      setStatus("Saving...");
+      saveCheckButton.disabled = true;
+      try {
+        const response = await fetch(`${apiBase}/api/save_check`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tg_user_id: state.userId,
+            check_url: state.lastScanUrl,
+            check_text: state.fetchedCheck.text,
+          }),
+        });
+        if (!response.ok) {
+          throw new Error("Failed to save check");
+        }
+        await response.json();
+        setStatus("Saved.");
+        fetchHistory();
+      } catch (error) {
+        setStatus("Failed to save check.");
+        saveCheckButton.disabled = false;
+      }
+    }
+
+    function initTelegram() {
+      if (!tg) {
+        notTelegramEl.style.display = "block";
+        scanButton.disabled = true;
+        return;
+      }
+      tg.expand();
+      state.userId = tg.initDataUnsafe && tg.initDataUnsafe.user ? tg.initDataUnsafe.user.id : null;
+      fetchHistory();
+      findCheckButton.addEventListener("click", findCheck);
+      saveCheckButton.addEventListener("click", saveCheck);
+
+      if (!tg.showScanQrPopup) {
+        setStatus("QR scanning is not supported in this Telegram version.");
+        scanButton.disabled = true;
+        return;
+      }
+
+      tg.onEvent("qrTextReceived", (event) => {
+        if (event && event.data) {
+          handleQrText(event.data);
+        }
+      });
+
+      scanButton.addEventListener("click", () => {
+        setStatus("Scanning...");
+        tg.showScanQrPopup({ text: "Point your camera at a QR code." });
+      });
+    }
+
+    initTelegram();
+  </script>
+</body>
+</html>
