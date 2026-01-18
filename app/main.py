@@ -8,6 +8,7 @@ from urllib.parse import parse_qs, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
+
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
