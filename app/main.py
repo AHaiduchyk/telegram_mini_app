@@ -8,7 +8,6 @@ from urllib.parse import parse_qs, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
-
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -146,17 +145,33 @@ def find_check(payload: FindCheckRequest) -> Dict[str, Any]:
     validate_check_url(payload.check_url)
     try:
         with httpx.Client(follow_redirects=True, timeout=10.0) as client:
-            response = client.get(payload.check_url)
+            response = client.get(
+                payload.check_url,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (compatible; TelegramMiniApp/1.0)",
+                    "Accept": "text/html,application/xhtml+xml",
+                },
+            )
             response.raise_for_status()
     except httpx.HTTPError as exc:
         logger.warning("Failed to fetch check URL: %s", exc)
         raise HTTPException(status_code=502, detail="Failed to fetch check URL") from exc
 
     soup = BeautifulSoup(response.text, "html.parser")
-    receipt_pre = soup.find("pre")
-    if not receipt_pre:
-        raise HTTPException(status_code=422, detail="Receipt not found")
-    receipt_text = receipt_pre.get_text("\n", strip=True)
+    receipt_text = ""
+    receipt_node = soup.find("pre")
+    if not receipt_node:
+        receipt_node = soup.find("textarea")
+    if not receipt_node:
+        receipt_node = soup.find(attrs={"id": "receipt"}) or soup.find(attrs={"id": "check"})
+    if not receipt_node:
+        receipt_node = soup.find(class_="receipt") or soup.find(class_="check")
+    if receipt_node:
+        receipt_text = receipt_node.get_text("\n", strip=True)
+    if not receipt_text:
+        body_text = soup.body.get_text("\n", strip=True) if soup.body else ""
+        if body_text:
+            receipt_text = body_text
     if not receipt_text:
         raise HTTPException(status_code=422, detail="Receipt not found")
 
