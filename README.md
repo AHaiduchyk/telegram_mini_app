@@ -83,6 +83,8 @@ python bot/bot.py
 ## API endpoints
 
 - `POST /api/scan` — store a scan and return enriched data.
+- `POST /api/find_check` — fetch a DPS receipt page and return the parsed `<pre>` text.
+- `POST /api/save_check` — persist a DPS receipt as a `tax_receipt` scan entry.
 - `GET /api/history?user_id=...` — list scans newest-first for a user.
 - `GET /api/scan/{id}` — get a single scan by id.
 
