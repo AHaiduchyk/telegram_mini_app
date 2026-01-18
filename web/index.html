@@ -86,15 +86,12 @@
 
   <div class="card">
     <button id="scan-button">Scan QR</button>
-    <button id="find-check-button" disabled>Find check</button>
-    <button id="save-check-button" disabled>Save data</button>
     <div class="toggle">
       <input type="checkbox" id="continuous" />
       <label for="continuous">Continuous scan</label>
     </div>
     <p class="muted" id="scan-status">Ready to scan.</p>
     <div id="last-scan" class="muted"></div>
-    <pre id="check-preview" class="muted" style="display: none;"></pre>
   </div>
 
   <div class="card">
@@ -114,9 +111,6 @@
     const scanButton = document.getElementById("scan-button");
     const scanStatus = document.getElementById("scan-status");
     const lastScanEl = document.getElementById("last-scan");
-    const findCheckButton = document.getElementById("find-check-button");
-    const saveCheckButton = document.getElementById("save-check-button");
-    const checkPreview = document.getElementById("check-preview");
     const historyEl = document.getElementById("history");
     const detailsEl = document.getElementById("details");
     const continuousToggle = document.getElementById("continuous");
@@ -126,8 +120,6 @@
       scans: [],
       lastText: null,
       lastTextAt: 0,
-      lastScanUrl: null,
-      fetchedCheck: null,
     };
 
     const apiBase = new URLSearchParams(window.location.search).get("api") || window.location.origin;
@@ -208,7 +200,6 @@
 
     async function submitScan(rawText) {
       lastScanEl.textContent = `Latest: ${rawText}`;
-      resetCheckState();
       if (rawText.length > 4096) {
         setStatus("QR text too long.");
         return;
@@ -216,13 +207,6 @@
       if (!state.userId) {
         setStatus("Missing Telegram user info.");
         return;
-      }
-      const checkUrl = getValidCheckUrl(rawText);
-      if (checkUrl) {
-        state.lastScanUrl = checkUrl;
-        findCheckButton.disabled = false;
-      } else {
-        findCheckButton.disabled = true;
       }
       try {
         const response = await fetch(`${apiBase}/api/scan`, {
@@ -267,90 +251,6 @@
       }
     }
 
-    function resetCheckState() {
-      checkPreview.style.display = "none";
-      checkPreview.textContent = "";
-      saveCheckButton.disabled = true;
-      state.fetchedCheck = null;
-    }
-
-    function getValidCheckUrl(rawText) {
-      try {
-        const url = new URL(rawText);
-        if (url.hostname !== "cabinet.tax.gov.ua") {
-          return null;
-        }
-        if (url.pathname !== "/cashregs/check") {
-          return null;
-        }
-        const required = ["fn", "id", "sm", "time", "date"];
-        const hasAll = required.every((key) => url.searchParams.get(key));
-        return hasAll ? url.toString() : null;
-      } catch (error) {
-        return null;
-      }
-    }
-
-    async function findCheck() {
-      if (!state.lastScanUrl || !state.userId) {
-        setStatus("Missing check URL.");
-        return;
-      }
-      setStatus("Finding check...");
-      findCheckButton.disabled = true;
-      try {
-        const response = await fetch(`${apiBase}/api/find_check`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            tg_user_id: state.userId,
-            check_url: state.lastScanUrl,
-          }),
-        });
-        if (!response.ok) {
-          throw new Error("Failed to fetch check");
-        }
-        const data = await response.json();
-        state.fetchedCheck = data;
-        checkPreview.textContent = data.text || "";
-        checkPreview.style.display = "block";
-        saveCheckButton.disabled = false;
-        setStatus("Check found.");
-      } catch (error) {
-        setStatus("Failed to find check.");
-        findCheckButton.disabled = false;
-      }
-    }
-
-    async function saveCheck() {
-      if (!state.fetchedCheck || !state.lastScanUrl || !state.userId) {
-        setStatus("Nothing to save.");
-        return;
-      }
-      setStatus("Saving...");
-      saveCheckButton.disabled = true;
-      try {
-        const response = await fetch(`${apiBase}/api/save_check`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            tg_user_id: state.userId,
-            check_url: state.lastScanUrl,
-            check_text: state.fetchedCheck.text,
-          }),
-        });
-        if (!response.ok) {
-          throw new Error("Failed to save check");
-        }
-        await response.json();
-        setStatus("Saved.");
-        fetchHistory();
-      } catch (error) {
-        setStatus("Failed to save check.");
-        saveCheckButton.disabled = false;
-      }
-    }
-
     function initTelegram() {
       if (!tg) {
         notTelegramEl.style.display = "block";
@@ -360,8 +260,6 @@
       tg.expand();
       state.userId = tg.initDataUnsafe && tg.initDataUnsafe.user ? tg.initDataUnsafe.user.id : null;
       fetchHistory();
-      findCheckButton.addEventListener("click", findCheck);
-      saveCheckButton.addEventListener("click", saveCheck);
 
       if (!tg.showScanQrPopup) {
         setStatus("QR scanning is not supported in this Telegram version.");

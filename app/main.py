@@ -4,10 +4,7 @@ import logging
 import os
 from pathlib import Path
 from typing import Any, Dict, List
-from urllib.parse import parse_qs, urlparse
 
-import httpx
-from bs4 import BeautifulSoup
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -54,17 +51,6 @@ class ScanResponse(BaseModel):
     created_at: str
 
 
-class FindCheckRequest(BaseModel):
-    tg_user_id: int
-    check_url: str
-
-
-class SaveCheckRequest(BaseModel):
-    tg_user_id: int
-    check_url: str
-    check_text: str
-
-
 @app.on_event("startup")
 def on_startup() -> None:
     init_db()
@@ -82,28 +68,6 @@ def root() -> FileResponse:
 def unhandled_exception_handler(_: Request, __: Exception) -> JSONResponse:
     logger.exception("Unhandled error")
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})
-
-
-@app.middleware("http")
-async def add_ngrok_skip_header(request: Request, call_next):  # type: ignore[no-untyped-def]
-    response = await call_next(request)
-    response.headers["ngrok-skip-browser-warning"] = "1"
-    return response
-
-
-def validate_check_url(check_url: str) -> str:
-    parsed = urlparse(check_url)
-    if parsed.scheme not in {"http", "https"}:
-        raise HTTPException(status_code=400, detail="Invalid check URL")
-    if parsed.hostname != "cabinet.tax.gov.ua":
-        raise HTTPException(status_code=400, detail="Invalid check URL")
-    if parsed.path != "/cashregs/check":
-        raise HTTPException(status_code=400, detail="Invalid check URL")
-    query = parse_qs(parsed.query)
-    required_params = {"fn", "id", "sm", "time", "date"}
-    if not required_params.issubset(query.keys()):
-        raise HTTPException(status_code=400, detail="Invalid check URL")
-    return check_url
 
 
 @app.post("/api/scan", response_model=ScanResponse)
@@ -126,54 +90,6 @@ def create_scan(payload: ScanCreate, session: Session = Depends(get_session)) ->
         raw_text=text,
         type=qr_type,
         info=info,
-    )
-    session.add(scan)
-    session.commit()
-    session.refresh(scan)
-
-    return ScanResponse(
-        id=scan.id,
-        raw_text=scan.raw_text,
-        type=scan.type,
-        info=scan.info,
-        created_at=scan.created_at.isoformat(),
-    )
-
-
-@app.post("/api/find_check")
-def find_check(payload: FindCheckRequest) -> Dict[str, Any]:
-    validate_check_url(payload.check_url)
-    try:
-        with httpx.Client(follow_redirects=True, timeout=10.0) as client:
-            response = client.get(payload.check_url)
-            response.raise_for_status()
-    except httpx.HTTPError as exc:
-        logger.warning("Failed to fetch check URL: %s", exc)
-        raise HTTPException(status_code=502, detail="Failed to fetch check URL") from exc
-
-    soup = BeautifulSoup(response.text, "html.parser")
-    receipt_pre = soup.find("pre")
-    if not receipt_pre:
-        raise HTTPException(status_code=422, detail="Receipt not found")
-    receipt_text = receipt_pre.get_text("\n", strip=True)
-    if not receipt_text:
-        raise HTTPException(status_code=422, detail="Receipt not found")
-
-    return {"ok": True, "text": receipt_text, "url": payload.check_url}
-
-
-@app.post("/api/save_check", response_model=ScanResponse)
-def save_check(
-    payload: SaveCheckRequest, session: Session = Depends(get_session)
-) -> ScanResponse:
-    validate_check_url(payload.check_url)
-    if not payload.check_text.strip():
-        raise HTTPException(status_code=400, detail="Empty check text")
-    scan = Scan(
-        tg_user_id=payload.tg_user_id,
-        raw_text=payload.check_url,
-        type="tax_receipt",
-        info={"receipt_text": payload.check_text},
     )
     session.add(scan)
     session.commit()
