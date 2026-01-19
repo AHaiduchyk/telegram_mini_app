@@ -1,0 +1,73 @@
+:root {
+  /* fallback */
+  --ios-bg: #000;
+  --ios-card-bg: #1c1c1e;
+  --ios-border: #38383a;
+  --ios-text: #fff;
+  --ios-text-secondary: #8e8e93;
+  --ios-text-tertiary: #636366;
+  --ios-blue: #007aff;
+  --ios-blue-hover: #0051d5;
+  --ios-blue-active: #004fc4;
+  --ios-green: #34c759;
+  --ios-red: #ff3b30;
+  --ios-yellow: #ffcc00;
+  --ios-secondary-bg: #2c2c2e;
+  --ios-tertiary-bg: #3a3a3c;
+
+  --coin-gold: #ffd34d;
+  --coin-gold-dark: #d7a600;
+}
+
+/* THEME 1: iOS default */
+html[data-theme="ios"] {
+  --ios-bg: #000000;
+  --ios-card-bg: #1c1c1e;
+  --ios-border: #38383a;
+
+  --ios-text: #ffffff;
+  --ios-text-secondary: #8e8e93;
+  --ios-text-tertiary: #636366;
+
+  --ios-blue: #007aff;
+  --ios-blue-hover: #0051d5;
+  --ios-blue-active: #004fc4;
+
+  --ios-green: #34c759;
+  --ios-red: #ff3b30;
+  --ios-yellow: #ffcc00;
+
+  --ios-secondary-bg: #2c2c2e;
+  --ios-tertiary-bg: #3a3a3c;
+}
+
+/* THEME 2: Dino */
+html[data-theme="dino"] {
+  --ios-bg: #07110b;
+  --ios-card-bg: #0e1d12;
+  --ios-border: rgba(255, 255, 255, 0.08);
+
+  --ios-text: #f3fff6;
+  --ios-text-secondary: rgba(243, 255, 246, 0.72);
+  --ios-text-tertiary: rgba(243, 255, 246, 0.45);
+
+  --ios-blue: #33d17a;
+  --ios-blue-hover: #26b965;
+  --ios-blue-active: #1fa45a;
+
+  --ios-green: #33d17a;
+  --ios-red: #ff4d4d;
+  --ios-yellow: #ffd34d;
+
+  --ios-secondary-bg: rgba(255, 255, 255, 0.06);
+  --ios-tertiary-bg: rgba(255, 255, 255, 0.09);
+}
+
+:root {
+  --anim-duration: 2.2s;
+}
+
+/* Paw mask only for Dino theme */
+html[data-theme="dino"] {
+  --paw-mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20512%20512'%3E%3Cg%3E%3Cpath%20d='M108.72%20211.39c-10.4-34.65-42.44-57.09-71.56-50.13-29.12%206.96-44.29%2040.69-33.89%2075.34%2010.4%2034.65%2042.44%2057.09%2071.56%2050.13%2029.12-6.96%2044.29-40.69%2033.89-75.34z'/%3E%3Cpath%20d='M193.44%20190.61c30.94-8.14%2046.42-49.94%2034.58-93.36s-46.52-72.01-77.46-63.87-46.42%2049.94-34.58%2093.36c11.84%2043.42%2046.53%2072.02%2077.46%2063.87z'/%3E%3Cpath%20d='M474.83%20161.27c-29.12-6.96-61.15%2015.48-71.56%2050.13-10.4%2034.65%204.77%2068.38%2033.89%2075.34%2029.12%206.96%2061.15-15.48%2071.56-50.13%2010.4-34.65-4.77-68.38-33.89-75.34z'/%3E%3Cpath%20d='M318.56%20190.61c30.94%208.14%2065.62-20.45%2077.46-63.87%2011.84-43.42-3.64-85.21-34.58-93.36s-65.62%2020.45-77.46%2063.87c-11.84%2043.42%203.64%2085.22%2034.58%2093.36z'/%3E%3Cpath%20d='M256%20224c-79.41%200-192%20122.76-192%20200.25%200%2034.9%2026.81%2055.75%2071.74%2055.75%2048.84%200%2081.09-25.08%20120.26-25.08%2039.51%200%2071.85%2025.08%20120.26%2025.08%2044.93%200%2071.74-20.85%2071.74-55.75C448%20346.76%20335.41%20224%20256%20224z'/%3E%3C/g%3E%3C/svg%3E");
+}

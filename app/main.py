@@ -30,7 +30,11 @@ app = FastAPI(title="Telegram QR Scanner", debug=False)
 # --- Static (Mini App) ---
 static_dir = Path(__file__).resolve().parent.parent / "web"
 if static_dir.exists():
-    app.mount("/web", StaticFiles(directory=static_dir, html=True), name="web")
+    app.mount("/css", StaticFiles(directory=static_dir / "css"), name="css")
+    app.mount("/js", StaticFiles(directory=static_dir / "js"), name="js")
+    assets_dir = static_dir / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
 # --- CORS ---
 miniapp_origin = os.getenv("MINIAPP_ORIGIN", "")

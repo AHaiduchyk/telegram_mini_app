@@ -1,0 +1,594 @@
+/* ===========================
+   Base reset
+=========================== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* ===========================
+   Body / global
+=========================== */
+body {
+  background: var(--ios-bg);
+  color: var(--ios-text);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+    "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ===========================
+   Navigation Bar
+=========================== */
+.nav-bar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--ios-card-bg);
+  border-bottom: 1px solid var(--ios-border);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.nav-content {
+  max-width: 428px;
+  margin: 0 auto;
+  padding: 0 16px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.nav-title {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.4px;
+}
+
+.nav-spacer {
+  flex: 1;
+}
+
+.nav-button {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--ios-blue);
+  margin-right: -12px;
+}
+
+/* ===========================
+   Main Container
+=========================== */
+.container {
+  max-width: 428px;
+  margin: 0 auto;
+  padding: 16px;
+  padding-bottom: 32px;
+}
+
+/* ===========================
+   Warning Card
+=========================== */
+.warning-card {
+  background: var(--ios-card-bg);
+  border-radius: 16px;
+  padding: 20px;
+  border: 1px solid var(--ios-border);
+  margin-bottom: 16px;
+}
+
+.warning-title {
+  font-size: 17px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.warning-text {
+  font-size: 15px;
+  color: var(--ios-text-secondary);
+}
+
+/* ===========================
+   Scanner Card
+=========================== */
+.scanner-card {
+  background: var(--ios-card-bg);
+  border-radius: 16px;
+  padding: 20px;
+  border: 1px solid var(--ios-border);
+  margin-bottom: 32px;
+}
+
+.scan-button {
+  width: 100%;
+  height: 52px;
+  background: var(--ios-blue);
+  color: white;
+  border: none;
+  border-radius: 14px;
+  font-size: 17px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background 0.15s;
+}
+
+.scan-button:hover {
+  background: var(--ios-blue-hover);
+}
+
+.scan-button:active {
+  background: var(--ios-blue-active);
+}
+
+.scan-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ===========================
+   Toggle
+=========================== */
+.toggle-row {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.toggle-label {
+  font-size: 15px;
+  color: var(--ios-text);
+}
+
+.toggle-switch {
+  position: relative;
+  width: 51px;
+  height: 31px;
+  background: #39393d;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: background 0.3s;
+  border: none;
+  outline: none;
+}
+
+.toggle-switch.active {
+  background: var(--ios-green);
+}
+
+.toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 27px;
+  height: 27px;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: transform 0.3s;
+}
+
+.toggle-switch.active .toggle-knob {
+  transform: translateX(20px);
+}
+
+.status-text {
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--ios-text-secondary);
+}
+
+/* ===========================
+   Section Title
+=========================== */
+.section-title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+  margin-bottom: 12px;
+  padding: 0 4px;
+}
+
+/* ===========================
+   History Card
+=========================== */
+.history-card {
+  background: var(--ios-card-bg);
+  border-radius: 16px;
+  border: 1px solid var(--ios-border);
+  overflow: visible;
+}
+
+.history-empty {
+  padding: 32px;
+  text-align: center;
+}
+
+.history-empty-title {
+  font-size: 17px;
+  color: var(--ios-text-secondary);
+  margin-bottom: 8px;
+}
+
+.history-empty-subtitle {
+  font-size: 13px;
+  color: var(--ios-text-tertiary);
+}
+
+/* ===========================
+   History Item
+=========================== */
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid var(--ios-border);
+}
+
+.history-item:last-child {
+  border-bottom: none;
+}
+
+.history-icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--ios-secondary-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.history-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.history-title {
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--ios-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-subtitle {
+  font-size: 13px;
+  color: var(--ios-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 2px;
+}
+
+.history-actions {
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* ===========================
+   Buttons
+=========================== */
+.btn-view {
+  padding: 6px 16px;
+  height: 32px;
+  background: var(--ios-blue);
+  color: white;
+  border: none;
+  border-radius: 16px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-view:hover {
+  background: var(--ios-blue-hover);
+}
+
+.btn-menu {
+  width: 36px;
+  height: 36px;
+  background: none;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ios-text-secondary);
+  transition: background 0.15s;
+}
+
+.btn-menu:hover {
+  background: var(--ios-secondary-bg);
+}
+
+/* ===========================
+   Dropdown Menu
+=========================== */
+.dropdown-menu {
+  position: absolute;
+  right: 0;
+  top: 40px;
+  width: 200px;
+  background: var(--ios-secondary-bg);
+  border-radius: 16px;
+  border: 1px solid var(--ios-border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+  overflow: hidden;
+  display: none;
+}
+
+.dropdown-menu.show {
+  display: block;
+}
+
+.menu-item {
+  width: 100%;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--ios-border);
+  color: var(--ios-text);
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.15s;
+}
+
+.menu-item:last-child {
+  border-bottom: none;
+}
+
+.menu-item:hover {
+  background: var(--ios-tertiary-bg);
+}
+
+.menu-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.menu-item.success {
+  color: var(--ios-green);
+}
+
+.menu-item.danger {
+  color: var(--ios-red);
+}
+
+/* ===========================
+   Details Card
+=========================== */
+.details-card {
+  background: var(--ios-card-bg);
+  border-radius: 16px;
+  padding: 20px;
+  border: 1px solid var(--ios-border);
+  margin-top: 32px;
+}
+
+.details-title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+  margin-bottom: 16px;
+}
+
+.details-section {
+  margin-bottom: 16px;
+}
+
+.details-label {
+  font-size: 13px;
+  color: var(--ios-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.details-value {
+  font-size: 15px;
+  color: var(--ios-text);
+  word-break: break-word;
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.details-item {
+  background: var(--ios-secondary-bg);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.details-item-key {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.details-item-value {
+  font-size: 13px;
+  color: var(--ios-text-secondary);
+  word-break: break-word;
+}
+
+.divider {
+  height: 1px;
+  background: var(--ios-border);
+  margin: 20px 0;
+}
+
+.receipt-section-title {
+  font-size: 17px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  margin-top: 16px;
+}
+
+.receipt-subtitle {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  margin-top: 12px;
+}
+
+/* ===========================
+   Tables
+=========================== */
+.table-wrapper {
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid var(--ios-border);
+  margin-bottom: 12px;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table th,
+.data-table td {
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 13px;
+  border-bottom: 1px solid var(--ios-border);
+}
+
+.data-table th {
+  background: var(--ios-secondary-bg);
+  font-weight: 600;
+  width: 40%;
+}
+
+.data-table tbody tr:last-child td,
+.data-table tbody tr:last-child th {
+  border-bottom: none;
+}
+
+.data-table.list-table th {
+  width: auto;
+}
+
+/* ===========================
+   Spinner
+=========================== */
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ===========================
+   Icons
+=========================== */
+.icon {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  stroke-width: 2;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.icon-small {
+  width: 18px;
+  height: 18px;
+}
+
+/* ===========================
+   Utility
+=========================== */
+.hidden {
+  display: none !important;
+}
+
+.relative {
+  position: relative;
+}
+
+/* =========================
+   Dino theme: Paw Spinner
+   Replaces .spinner only in dino theme
+   ========================= */
+
+html[data-theme="dino"] .spinner {
+  width: 18px;
+  height: 18px;
+
+  /* прибираємо старий border-spinner */
+  border: none;
+  border-radius: 0;
+  background: var(--ios-blue);
+
+  /* робимо силует лапки через mask */
+  -webkit-mask: var(--paw-mask) center / contain no-repeat;
+  mask: var(--paw-mask) center / contain no-repeat;
+
+  /* анімація */
+  transform-origin: 50% 75%;
+  animation: pawPulse var(--anim-duration, 2.2s) ease-in-out infinite;
+}
+
+/* лапка “пульсує”, як у твоєму прикладі (heel + toes загальною фазою) */
+@keyframes pawPulse {
+  0%   { transform: scale(0) rotate(0deg);   opacity: 0; }
+  10%  { transform: scale(1.08) rotate(0deg); opacity: 1; }
+  20%  { transform: scale(1) rotate(0deg);    opacity: 1; }
+  35%  { transform: scale(1.06) rotate(0deg); opacity: 1; }
+  85%  { transform: scale(1) rotate(360deg);  opacity: 1; }
+  100% { transform: scale(0) rotate(360deg);  opacity: 0; }
+}
+
+/* Dino: dropdown menu must be solid */
+html[data-theme="dino"] .dropdown-menu {
+  background: #0e1d12; /* такий самий як card-bg */
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html[data-theme="dino"] .menu-item:hover {
+  background: #122717;
+}
