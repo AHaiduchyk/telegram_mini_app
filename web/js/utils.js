@@ -13,6 +13,8 @@ export function truncate(text, maxLength) {
 }
 
 export function getValidCheckUrl(rawText) {
+  if (!rawText) return null;
+
   try {
     const url = new URL(rawText);
     if (url.hostname !== "cabinet.tax.gov.ua") return null;
@@ -21,8 +23,47 @@ export function getValidCheckUrl(rawText) {
     const hasAll = required.every((key) => url.searchParams.get(key));
     return hasAll ? url.toString() : null;
   } catch {
-    return null;
+    // continue
   }
+
+  const params = parseCheckParams(String(rawText));
+  if (!params) return null;
+
+  const search = new URLSearchParams(params);
+  return `https://cabinet.tax.gov.ua/cashregs/check?${search.toString()}`;
+}
+
+function parseCheckParams(rawText) {
+  const cleaned = rawText.trim().replace(/^[?]/, "");
+  if (!cleaned) return null;
+
+  const search = new URLSearchParams(cleaned.replace(/;/g, "&"));
+  const fn = search.get("fn");
+  const id = search.get("id") || search.get("i");
+  const sm = search.get("sm") || search.get("s");
+  let date = search.get("date");
+  let time = search.get("time");
+
+  const tValue = search.get("t");
+  if ((!date || !time) && tValue) {
+    const normalized = tValue.replace(/[^0-9T]/g, "");
+    const match = normalized.match(/^(\d{8})T?(\d{4})(\d{2})?$/);
+    if (match) {
+      const [, parsedDate, hhmm, ss] = match;
+      if (!date) date = parsedDate;
+      if (!time) time = `${hhmm}${ss || ""}`;
+    }
+  }
+
+  if (!fn || !id || !sm || !date || !time) return null;
+
+  return {
+    fn,
+    id,
+    sm,
+    time,
+    date,
+  };
 }
 
 export function pickDbStatus(scan) {
@@ -34,6 +75,7 @@ export function pickDbStatus(scan) {
 export function getItemType(scan) {
   if (scan?.type === "url") return "link";
   if (scan?.info?.url) return "link";
+  if (getValidCheckUrl(scan?.raw_text)) return "link";
   return "text";
 }
 
@@ -41,7 +83,7 @@ export function getItemTitle(scan) {
   const type = getItemType(scan);
   if (type === "text") return "Text";
 
-  const urlValue = scan?.info?.url ?? scan?.raw_text;
+  const urlValue = scan?.info?.url ?? getValidCheckUrl(scan?.raw_text) ?? scan?.raw_text;
   if (!urlValue) return "Link";
 
   const normalizedUrl = normalizeUrl(urlValue);
