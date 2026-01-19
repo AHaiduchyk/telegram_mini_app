@@ -19,6 +19,9 @@ def normalize_url(text: str) -> str | None:
     if parsed.scheme and parsed.netloc:
         return candidate
     if "." in candidate and " " not in candidate:
+        looks_like_query = "=" in candidate and "&" in candidate and "/" not in candidate
+        if looks_like_query:
+            return None
         return f"https://{candidate}"
     return None
 

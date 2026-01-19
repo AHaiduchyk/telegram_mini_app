@@ -230,7 +230,12 @@ export function showDetails(scan) {
   state.selectedScan = scan;
   if (state.detailsContainer) state.detailsContainer.classList.remove("hidden");
 
-  const infoEntries = Object.entries(scan.info || {});
+  const infoData = { ...(scan.info || {}) };
+  if (!infoData.url) {
+    const derivedUrl = getValidCheckUrl(scan.raw_text);
+    if (derivedUrl) infoData.url = derivedUrl;
+  }
+  const infoEntries = Object.entries(infoData);
   const infoGrid = infoEntries.length
     ? `<div class="details-grid">${infoEntries
         .map(([key, value]) => {
