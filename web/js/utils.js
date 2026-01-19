@@ -32,24 +32,35 @@ export function pickDbStatus(scan) {
 }
 
 export function getItemType(scan) {
-  try {
-    new URL(scan.raw_text);
-    return "link";
-  } catch {
-    return "text";
-  }
+  if (scan?.type === "url") return "link";
+  if (scan?.info?.url) return "link";
+  return "text";
 }
 
 export function getItemTitle(scan) {
   const type = getItemType(scan);
   if (type === "text") return "Text";
 
+  const urlValue = scan?.info?.url ?? scan?.raw_text;
+  if (!urlValue) return "Link";
+
+  const normalizedUrl = normalizeUrl(urlValue);
+  if (!normalizedUrl) return "Link";
+
   try {
-    const url = new URL(scan.raw_text);
-    return url.hostname.replace("www.", "");
+    const url = new URL(normalizedUrl);
+    return url.hostname.replace(/^www\./, "");
   } catch {
     return "Link";
   }
+}
+
+function normalizeUrl(value) {
+  const trimmed = String(value).trim();
+  if (!trimmed) return null;
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed)) return trimmed;
+  if (trimmed.startsWith("www.")) return `https://${trimmed}`;
+  return trimmed;
 }
 
 import { state } from "./state.js";
