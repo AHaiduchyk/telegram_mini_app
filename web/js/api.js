@@ -120,8 +120,6 @@ export async function findCheck(index) {
   renderHistory();
 
   try {
-    await new Promise((r) => setTimeout(r, 5000));
-
     const res = await fetch(`${state.apiBase}/api/find_check`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
