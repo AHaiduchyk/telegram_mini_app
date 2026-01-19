@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
 import time
@@ -18,6 +19,7 @@ from selenium.webdriver.common.action_chains import ActionChains
 from seleniumbase import SB
 from sqlmodel import Session, select
 
+from app.auth import InitDataValidationError, extract_user_id, validate_init_data, validate_init_data_unsafe
 from app.db import get_session, init_db
 from app.models import Scan, TaxCheck
 from app.qr_parse import parse_qr_text
@@ -51,7 +53,8 @@ app.add_middleware(
 # --- Models (API payloads) ---
 class ScanCreate(BaseModel):
     raw_text: str = Field(..., max_length=4096)
-    tg_user_id: int
+    init_data: Optional[str] = None
+    init_data_unsafe: Optional[Dict[str, Any]] = None
     timestamp: Optional[str] = None
 
 
@@ -64,12 +67,14 @@ class ScanResponse(BaseModel):
 
 
 class FindCheckRequest(BaseModel):
-    tg_user_id: int
+    init_data: Optional[str] = None
+    init_data_unsafe: Optional[Dict[str, Any]] = None
     check_url: str = Field(..., max_length=4096)
 
 
 class SaveCheckRequest(BaseModel):
-    tg_user_id: int
+    init_data: Optional[str] = None
+    init_data_unsafe: Optional[Dict[str, Any]] = None
     check_url: str = Field(..., max_length=4096)
     check_text: str = Field(..., max_length=2_000_000)
 
@@ -116,6 +121,23 @@ def validate_check_url(check_url: str) -> str:
         raise HTTPException(status_code=400, detail="Invalid check URL (missing params)")
 
     return check_url
+
+
+def get_verified_user_id(init_data: Optional[str], init_data_unsafe: Optional[Dict[str, Any]]) -> int:
+    bot_token = os.getenv("BOT_TOKEN")
+    if not bot_token:
+        raise HTTPException(status_code=500, detail="BOT_TOKEN is not configured")
+
+    try:
+        if init_data:
+            fields = validate_init_data(init_data, bot_token)
+        elif init_data_unsafe:
+            fields = validate_init_data_unsafe(init_data_unsafe, bot_token)
+        else:
+            raise InitDataValidationError("Missing initData", status_code=401)
+        return extract_user_id(fields)
+    except InitDataValidationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
 
 def extract_check_id(check_url: str) -> str:
@@ -328,8 +350,7 @@ def _status_map_for_user(session: Session, tg_user_id: int) -> Dict[str, Dict[st
 
 @app.post("/api/scan", response_model=ScanResponse)
 def create_scan(payload: ScanCreate, session: Session = Depends(get_session)) -> ScanResponse:
-    if not payload.tg_user_id:
-        raise HTTPException(status_code=400, detail="Missing tg_user_id")
+    user_id = get_verified_user_id(payload.init_data, payload.init_data_unsafe)
 
     text = payload.raw_text.strip()
     if not text:
@@ -340,7 +361,7 @@ def create_scan(payload: ScanCreate, session: Session = Depends(get_session)) ->
     qr_type, info = parse_qr_text(text)
 
     scan = Scan(
-        tg_user_id=payload.tg_user_id,
+        tg_user_id=user_id,
         raw_text=text,
         type=qr_type,
         info=info,
@@ -360,11 +381,18 @@ def create_scan(payload: ScanCreate, session: Session = Depends(get_session)) ->
 
 @app.get("/api/history", response_model=List[ScanResponse])
 def get_history(
-    user_id: int = Query(..., alias="user_id"),
+    init_data: Optional[str] = Query(None, alias="init_data"),
+    init_data_unsafe: Optional[str] = Query(None, alias="init_data_unsafe"),
     session: Session = Depends(get_session),
 ) -> List[ScanResponse]:
-    if not user_id:
-        raise HTTPException(status_code=400, detail="Missing user_id")
+    parsed_unsafe: Optional[Dict[str, Any]] = None
+    if init_data_unsafe:
+        try:
+            parsed_unsafe = json.loads(init_data_unsafe)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(status_code=400, detail="Invalid init_data_unsafe") from exc
+
+    user_id = get_verified_user_id(init_data, parsed_unsafe)
 
     status_map = _status_map_for_user(session, user_id)
 
@@ -412,14 +440,13 @@ def get_scan(scan_id: int, session: Session = Depends(get_session)) -> ScanRespo
 
 @app.post("/api/find_check")
 def find_check(payload: FindCheckRequest, session: Session = Depends(get_session)) -> Dict[str, Any]:
-    if not payload.tg_user_id:
-        raise HTTPException(status_code=400, detail="Missing tg_user_id")
+    user_id = get_verified_user_id(payload.init_data, payload.init_data_unsafe)
 
     validate_check_url(payload.check_url)
     check_id = extract_check_id(payload.check_url)
 
     existing = session.get(TaxCheck, check_id)
-    if existing and existing.tg_user_id == payload.tg_user_id and existing.is_founded and existing.xml_text:
+    if existing and existing.tg_user_id == user_id and existing.is_founded and existing.xml_text:
         return {
             "ok": True,
             "message": "Check already founded",
@@ -442,7 +469,7 @@ def find_check(payload: FindCheckRequest, session: Session = Depends(get_session
 
     row = _upsert_taxcheck_founded(
         session=session,
-        tg_user_id=payload.tg_user_id,
+        tg_user_id=user_id,
         check_id=check_id,
         check_url=payload.check_url,
         xml_text=xml_text,
@@ -462,8 +489,7 @@ def find_check(payload: FindCheckRequest, session: Session = Depends(get_session
 
 @app.post("/api/save_check")
 def save_check(payload: SaveCheckRequest, session: Session = Depends(get_session)) -> Dict[str, Any]:
-    if not payload.tg_user_id:
-        raise HTTPException(status_code=400, detail="Missing tg_user_id")
+    user_id = get_verified_user_id(payload.init_data, payload.init_data_unsafe)
 
     validate_check_url(payload.check_url)
     check_id = extract_check_id(payload.check_url)
@@ -474,14 +500,14 @@ def save_check(payload: SaveCheckRequest, session: Session = Depends(get_session
 
     row = _upsert_taxcheck_saved(
         session=session,
-        tg_user_id=payload.tg_user_id,
+        tg_user_id=user_id,
         check_id=check_id,
         check_url=payload.check_url,
         xml_text=xml_text,
     )
 
     scan = Scan(
-        tg_user_id=payload.tg_user_id,
+        tg_user_id=user_id,
         raw_text=payload.check_url,
         type="tax_receipt_xml",
         info={

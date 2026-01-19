@@ -40,6 +40,7 @@ export function initTelegram() {
   tg.ready();
   tg.expand();
 
+  state.initData = tg.initData || null;
   state.userId = tg.initDataUnsafe?.user?.id || null;
 
   // всередині fetchHistory() є check на userId — але норм так
