@@ -1,0 +1,17 @@
+# Python venv
+.venv/
+venv/
+ENV/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Local env files
+.env
+
+# SQLite DB
+*.db
+
+downloaded_files

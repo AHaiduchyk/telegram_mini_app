@@ -15,3 +15,23 @@ class Scan(SQLModel, table=True):
     type: str = Field(max_length=32)
     info: Dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+
+class TaxCheck(SQLModel, table=True):
+    # check_id з URL (параметр id=...), напр. "3135993637"
+    id: str = Field(primary_key=True, index=True)
+
+    tg_user_id: int = Field(index=True)
+    check_url: str = Field(max_length=4096)
+
+    is_founded: bool = Field(default=False, index=True)
+    is_saved: bool = Field(default=False, index=True)
+
+    # XML зберігаємо після Save
+    xml_text: Optional[str] = Field(default=None)
+
+    # вже “преттифай” структура для UI
+    parsed: Dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON))
+
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)

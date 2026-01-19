@@ -2,21 +2,24 @@ from __future__ import annotations
 
 import logging
 import os
+import time
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from urllib.parse import parse_qs, urlparse
 
-import httpx
-from bs4 import BeautifulSoup
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from selenium.webdriver.common.action_chains import ActionChains
+from seleniumbase import SB
 from sqlmodel import Session, select
 
 from app.db import get_session, init_db
-from app.models import Scan
+from app.models import Scan, TaxCheck
 from app.qr_parse import parse_qr_text
 
 logger = logging.getLogger("qr_scanner")
@@ -24,10 +27,12 @@ logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(title="Telegram QR Scanner", debug=False)
 
+# --- Static (Mini App) ---
 static_dir = Path(__file__).resolve().parent.parent / "web"
 if static_dir.exists():
     app.mount("/web", StaticFiles(directory=static_dir, html=True), name="web")
 
+# --- CORS ---
 miniapp_origin = os.getenv("MINIAPP_ORIGIN", "")
 allow_origins = [miniapp_origin] if miniapp_origin else []
 
@@ -39,11 +44,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
+# --- Models (API payloads) ---
 class ScanCreate(BaseModel):
     raw_text: str = Field(..., max_length=4096)
     tg_user_id: int
-    timestamp: str | None = None
+    timestamp: Optional[str] = None
 
 
 class ScanResponse(BaseModel):
@@ -56,13 +61,13 @@ class ScanResponse(BaseModel):
 
 class FindCheckRequest(BaseModel):
     tg_user_id: int
-    check_url: str
+    check_url: str = Field(..., max_length=4096)
 
 
 class SaveCheckRequest(BaseModel):
     tg_user_id: int
-    check_url: str
-    check_text: str
+    check_url: str = Field(..., max_length=4096)
+    check_text: str = Field(..., max_length=2_000_000)
 
 
 @app.on_event("startup")
@@ -93,23 +98,235 @@ async def add_ngrok_skip_header(request: Request, call_next):  # type: ignore[no
 
 def validate_check_url(check_url: str) -> str:
     parsed = urlparse(check_url)
+
     if parsed.scheme not in {"http", "https"}:
-        raise HTTPException(status_code=400, detail="Invalid check URL")
+        raise HTTPException(status_code=400, detail="Invalid check URL (scheme)")
     if parsed.hostname != "cabinet.tax.gov.ua":
-        raise HTTPException(status_code=400, detail="Invalid check URL")
+        raise HTTPException(status_code=400, detail="Invalid check URL (host)")
     if parsed.path != "/cashregs/check":
-        raise HTTPException(status_code=400, detail="Invalid check URL")
+        raise HTTPException(status_code=400, detail="Invalid check URL (path)")
+
     query = parse_qs(parsed.query)
     required_params = {"fn", "id", "sm", "time", "date"}
     if not required_params.issubset(query.keys()):
-        raise HTTPException(status_code=400, detail="Invalid check URL")
+        raise HTTPException(status_code=400, detail="Invalid check URL (missing params)")
+
     return check_url
+
+
+def extract_check_id(check_url: str) -> str:
+    parsed = urlparse(check_url)
+    qs = parse_qs(parsed.query)
+    check_id = (qs.get("id") or [None])[0]
+    if not check_id:
+        raise HTTPException(status_code=400, detail="Invalid check URL (missing id)")
+    return str(check_id)
+
+
+def newest_file(folder: Path) -> Optional[Path]:
+    files = list(folder.glob("*"))
+    if not files:
+        return None
+    return max(files, key=lambda p: p.stat().st_mtime)
+
+
+def wait_new_xml(folder: Path, check_id: str, before_ts: float, timeout: int = 30) -> Optional[Path]:
+    end = time.time() + timeout
+
+    while time.time() < end:
+        # exact + duplicates: 3135993637.xml, 3135993637 (3).xml, etc.
+        candidates = sorted(
+            folder.glob(f"{check_id}*.xml"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        for p in candidates:
+            if p.is_file() and p.stat().st_mtime >= before_ts:
+                return p
+
+        # fallback newest xml
+        f = newest_file(folder)
+        if f and f.suffix.lower() == ".xml" and f.stat().st_mtime >= before_ts:
+            return f
+
+        time.sleep(0.3)
+
+    return None
+
+
+@dataclass(frozen=True)
+class XmlDownloadResult:
+    check_id: str
+    xml_path: Path
+
+
+class TaxGovXmlDownloader:
+    def __init__(
+        self,
+        download_dir: Path,
+        headless: bool = True,
+        open_timeout_sec: int = 300,
+        download_timeout_sec: int = 30,
+    ) -> None:
+        self.download_dir = download_dir
+        self.download_dir.mkdir(parents=True, exist_ok=True)
+        self.headless = headless
+        self.open_timeout_sec = open_timeout_sec
+        self.download_timeout_sec = download_timeout_sec
+        self._xml_btn_xpath = "//button[.//span[normalize-space()='XML']]"
+
+    def _set_download_dir(self, sb: SB) -> None:
+        sb.driver.execute_cdp_cmd(
+            "Page.setDownloadBehavior",
+            {"behavior": "allow", "downloadPath": str(self.download_dir.resolve())},
+        )
+
+    def fetch(self, url: str) -> XmlDownloadResult:
+        check_id = extract_check_id(url)
+        before = time.time()
+
+        with SB(uc=True, headless=self.headless) as sb:
+            self._set_download_dir(sb)
+
+            sb.uc_open_with_reconnect(url, 3)
+            sb.wait_for_element(self._xml_btn_xpath, timeout=self.open_timeout_sec)
+            sb.scroll_to(self._xml_btn_xpath)
+
+            el = sb.find_element(self._xml_btn_xpath)
+            ActionChains(sb.driver).move_to_element(el).pause(0.2).click(el).perform()
+            time.sleep(0.5)
+
+            search_dirs: List[Path] = []
+            search_dirs.append(self.download_dir)
+
+            try:
+                search_dirs.append(Path.cwd() / "downloaded_files")
+            except Exception:
+                pass
+
+            try:
+                search_dirs.append(Path(sb.get_downloads_folder()))
+            except Exception:
+                pass
+
+            xml_path: Optional[Path] = None
+            for folder in search_dirs:
+                xml_path = wait_new_xml(
+                    folder=folder,
+                    check_id=check_id,
+                    before_ts=before,
+                    timeout=self.download_timeout_sec,
+                )
+                if xml_path:
+                    break
+
+            if not xml_path:
+                raise HTTPException(status_code=422, detail="XML download not detected")
+
+            return XmlDownloadResult(check_id=check_id, xml_path=xml_path)
+
+
+def decode_xml_bytes(raw: bytes) -> str:
+    enc = "utf-8"
+    head = raw[:256].decode("ascii", errors="ignore").lower()
+    if "encoding=" in head:
+        import re
+
+        m = re.search(r'encoding=["\']([^"\']+)["\']', head)
+        if m:
+            enc = m.group(1).strip()
+
+    try:
+        return raw.decode(enc, errors="replace").strip()
+    except Exception:
+        return raw.decode("utf-8", errors="replace").strip()
+
+
+def _upsert_taxcheck_founded(
+    session: Session,
+    tg_user_id: int,
+    check_id: str,
+    check_url: str,
+    xml_text: str,
+) -> TaxCheck:
+    now = datetime.utcnow()
+    row = session.get(TaxCheck, check_id)
+
+    if row is None:
+        row = TaxCheck(
+            id=check_id,
+            tg_user_id=tg_user_id,
+            check_url=check_url,
+            is_founded=True,
+            is_saved=False,
+            xml_text=xml_text,
+            parsed={},
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(row)
+    else:
+        row.tg_user_id = tg_user_id
+        row.check_url = check_url
+        row.is_founded = True
+        row.xml_text = xml_text
+        row.updated_at = now
+
+    session.commit()
+    session.refresh(row)
+    return row
+
+
+def _upsert_taxcheck_saved(
+    session: Session,
+    tg_user_id: int,
+    check_id: str,
+    check_url: str,
+    xml_text: str,
+) -> TaxCheck:
+    now = datetime.utcnow()
+    row = session.get(TaxCheck, check_id)
+
+    if row is None:
+        row = TaxCheck(
+            id=check_id,
+            tg_user_id=tg_user_id,
+            check_url=check_url,
+            is_founded=True,
+            is_saved=True,
+            xml_text=xml_text,
+            parsed={},
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(row)
+    else:
+        row.tg_user_id = tg_user_id
+        row.check_url = check_url
+        row.is_founded = True
+        row.is_saved = True
+        row.xml_text = xml_text
+        row.updated_at = now
+
+    session.commit()
+    session.refresh(row)
+    return row
+
+
+def _status_map_for_user(session: Session, tg_user_id: int) -> Dict[str, Dict[str, bool]]:
+    stmt = select(TaxCheck).where(TaxCheck.tg_user_id == tg_user_id)
+    rows = session.exec(stmt).all()
+    out: Dict[str, Dict[str, bool]] = {}
+    for r in rows:
+        out[r.id] = {"founded": bool(r.is_founded), "saved": bool(r.is_saved)}
+    return out
 
 
 @app.post("/api/scan", response_model=ScanResponse)
 def create_scan(payload: ScanCreate, session: Session = Depends(get_session)) -> ScanResponse:
     if not payload.tg_user_id:
         raise HTTPException(status_code=400, detail="Missing tg_user_id")
+
     text = payload.raw_text.strip()
     if not text:
         raise HTTPException(status_code=400, detail="Empty QR text")
@@ -118,78 +335,11 @@ def create_scan(payload: ScanCreate, session: Session = Depends(get_session)) ->
 
     qr_type, info = parse_qr_text(text)
 
-    # Hook for custom post-processing or enrichment logic.
-    # You can modify `info` or add additional keys based on your business rules.
-
     scan = Scan(
         tg_user_id=payload.tg_user_id,
         raw_text=text,
         type=qr_type,
         info=info,
-    )
-    session.add(scan)
-    session.commit()
-    session.refresh(scan)
-
-    return ScanResponse(
-        id=scan.id,
-        raw_text=scan.raw_text,
-        type=scan.type,
-        info=scan.info,
-        created_at=scan.created_at.isoformat(),
-    )
-
-
-@app.post("/api/find_check")
-def find_check(payload: FindCheckRequest) -> Dict[str, Any]:
-    validate_check_url(payload.check_url)
-    try:
-        with httpx.Client(follow_redirects=True, timeout=10.0) as client:
-            response = client.get(
-                payload.check_url,
-                headers={
-                    "User-Agent": "Mozilla/5.0 (compatible; TelegramMiniApp/1.0)",
-                    "Accept": "text/html,application/xhtml+xml",
-                },
-            )
-            response.raise_for_status()
-    except httpx.HTTPError as exc:
-        logger.warning("Failed to fetch check URL: %s", exc)
-        raise HTTPException(status_code=502, detail="Failed to fetch check URL") from exc
-
-    soup = BeautifulSoup(response.text, "html.parser")
-    receipt_text = ""
-    receipt_node = soup.find("pre")
-    if not receipt_node:
-        receipt_node = soup.find("textarea")
-    if not receipt_node:
-        receipt_node = soup.find(attrs={"id": "receipt"}) or soup.find(attrs={"id": "check"})
-    if not receipt_node:
-        receipt_node = soup.find(class_="receipt") or soup.find(class_="check")
-    if receipt_node:
-        receipt_text = receipt_node.get_text("\n", strip=True)
-    if not receipt_text:
-        body_text = soup.body.get_text("\n", strip=True) if soup.body else ""
-        if body_text:
-            receipt_text = body_text
-    if not receipt_text:
-        raise HTTPException(status_code=422, detail="Receipt not found")
-
-    return {"ok": True, "text": receipt_text, "url": payload.check_url}
-
-
-@app.post("/api/save_check", response_model=ScanResponse)
-def save_check(
-    payload: SaveCheckRequest, session: Session = Depends(get_session)
-) -> ScanResponse:
-    validate_check_url(payload.check_url)
-    if not payload.check_text.strip():
-        raise HTTPException(status_code=400, detail="Empty check text")
-    scan = Scan(
-        tg_user_id=payload.tg_user_id,
-        raw_text=payload.check_url,
-        type="tax_receipt",
-        info={"receipt_text": payload.check_text},
     )
     session.add(scan)
     session.commit()
@@ -211,18 +361,34 @@ def get_history(
 ) -> List[ScanResponse]:
     if not user_id:
         raise HTTPException(status_code=400, detail="Missing user_id")
+
+    status_map = _status_map_for_user(session, user_id)
+
     statement = select(Scan).where(Scan.tg_user_id == user_id).order_by(Scan.created_at.desc())
     scans = session.exec(statement).all()
-    return [
-        ScanResponse(
-            id=scan.id,
-            raw_text=scan.raw_text,
-            type=scan.type,
-            info=scan.info,
-            created_at=scan.created_at.isoformat(),
+
+    out: List[ScanResponse] = []
+    for s in scans:
+        info = dict(s.info or {})
+        try:
+            if s.raw_text and "cabinet.tax.gov.ua/cashregs/check" in s.raw_text:
+                cid = extract_check_id(s.raw_text)
+                info["check_id"] = cid
+                info["check_status"] = status_map.get(cid, {"founded": False, "saved": False})
+        except Exception:
+            pass
+
+        out.append(
+            ScanResponse(
+                id=s.id,
+                raw_text=s.raw_text,
+                type=s.type,
+                info=info,
+                created_at=s.created_at.isoformat(),
+            )
         )
-        for scan in scans
-    ]
+
+    return out
 
 
 @app.get("/api/scan/{scan_id}", response_model=ScanResponse)
@@ -230,6 +396,7 @@ def get_scan(scan_id: int, session: Session = Depends(get_session)) -> ScanRespo
     scan = session.get(Scan, scan_id)
     if not scan:
         raise HTTPException(status_code=404, detail="Scan not found")
+
     return ScanResponse(
         id=scan.id,
         raw_text=scan.raw_text,
@@ -237,3 +404,96 @@ def get_scan(scan_id: int, session: Session = Depends(get_session)) -> ScanRespo
         info=scan.info,
         created_at=scan.created_at.isoformat(),
     )
+
+
+@app.post("/api/find_check")
+def find_check(payload: FindCheckRequest, session: Session = Depends(get_session)) -> Dict[str, Any]:
+    if not payload.tg_user_id:
+        raise HTTPException(status_code=400, detail="Missing tg_user_id")
+
+    validate_check_url(payload.check_url)
+    check_id = extract_check_id(payload.check_url)
+
+    existing = session.get(TaxCheck, check_id)
+    if existing and existing.tg_user_id == payload.tg_user_id and existing.is_founded and existing.xml_text:
+        return {
+            "ok": True,
+            "message": "Check already founded",
+            "url": existing.check_url,
+            "check_id": existing.id,
+            "text": existing.xml_text,
+            "founded": bool(existing.is_founded),
+            "saved": bool(existing.is_saved),
+        }
+
+    base = Path(os.getenv("DOWNLOAD_DIR", "downloaded_files"))
+    downloader = TaxGovXmlDownloader(download_dir=base, headless=True)
+
+    result = downloader.fetch(payload.check_url)
+
+    raw = result.xml_path.read_bytes()
+    xml_text = decode_xml_bytes(raw)
+    if not xml_text:
+        raise HTTPException(status_code=422, detail="Downloaded XML is empty")
+
+    row = _upsert_taxcheck_founded(
+        session=session,
+        tg_user_id=payload.tg_user_id,
+        check_id=check_id,
+        check_url=payload.check_url,
+        xml_text=xml_text,
+    )
+
+    return {
+        "ok": True,
+        "message": "Check found and XML downloaded",
+        "url": payload.check_url,
+        "check_id": check_id,
+        "text": xml_text,
+        "filename": result.xml_path.name,
+        "founded": bool(row.is_founded),
+        "saved": bool(row.is_saved),
+    }
+
+
+@app.post("/api/save_check")
+def save_check(payload: SaveCheckRequest, session: Session = Depends(get_session)) -> Dict[str, Any]:
+    if not payload.tg_user_id:
+        raise HTTPException(status_code=400, detail="Missing tg_user_id")
+
+    validate_check_url(payload.check_url)
+    check_id = extract_check_id(payload.check_url)
+
+    xml_text = payload.check_text.strip()
+    if not xml_text:
+        raise HTTPException(status_code=400, detail="Empty check_text")
+
+    row = _upsert_taxcheck_saved(
+        session=session,
+        tg_user_id=payload.tg_user_id,
+        check_id=check_id,
+        check_url=payload.check_url,
+        xml_text=xml_text,
+    )
+
+    scan = Scan(
+        tg_user_id=payload.tg_user_id,
+        raw_text=payload.check_url,
+        type="tax_receipt_xml",
+        info={
+            "check_id": check_id,
+            "source_url": payload.check_url,
+            "saved": True,
+        },
+    )
+    session.add(scan)
+    session.commit()
+
+    return {
+        "ok": True,
+        "message": "Saved",
+        "url": row.check_url,
+        "check_id": row.id,
+        "founded": bool(row.is_founded),
+        "saved": bool(row.is_saved),
+    }
