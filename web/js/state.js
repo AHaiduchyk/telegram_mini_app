@@ -1,5 +1,6 @@
 export const state = {
   // runtime
+  initData: null,
   userId: null,
   scans: [],
   lastText: null,

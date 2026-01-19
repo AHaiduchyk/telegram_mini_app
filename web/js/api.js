@@ -8,10 +8,12 @@ function setStatus(message) {
 }
 
 export async function fetchHistory() {
-  if (!state.userId) return;
+  if (!state.initData) return;
 
   try {
-    const res = await fetch(`${state.apiBase}/api/history?user_id=${state.userId}`);
+    const res = await fetch(
+      `${state.apiBase}/api/history?init_data=${encodeURIComponent(state.initData)}`
+    );
     if (!res.ok) throw new Error("Failed to load history");
 
     const scansAll = await res.json();
@@ -51,8 +53,8 @@ export async function fetchHistory() {
 }
 
 export async function submitScan(rawText) {
-  if (!state.userId) {
-    setStatus("Missing Telegram user info.");
+  if (!state.initData) {
+    setStatus("Missing Telegram initData.");
     return;
   }
   if (!rawText || rawText.length > 4096) {
@@ -66,7 +68,7 @@ export async function submitScan(rawText) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         raw_text: rawText,
-        tg_user_id: state.userId,
+        init_data: state.initData,
         timestamp: new Date().toISOString(),
       }),
     });
@@ -97,7 +99,7 @@ export async function findCheck(index) {
 
   const key = scan.raw_text;
   const url = getValidCheckUrl(key);
-  if (!url || !state.userId) return;
+  if (!url || !state.initData) return;
 
   const current = state.findStatus.get(key) || "idle";
   if (current === "founded") {
@@ -125,7 +127,7 @@ export async function findCheck(index) {
     const res = await fetch(`${state.apiBase}/api/find_check`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tg_user_id: state.userId, check_url: url }),
+      body: JSON.stringify({ init_data: state.initData, check_url: url }),
     });
 
     if (!res.ok) throw new Error("Failed to fetch check");
@@ -161,7 +163,7 @@ export async function saveCheck(index) {
 
   const key = scan.raw_text;
   const url = getValidCheckUrl(key);
-  if (!url || !state.userId) return;
+  if (!url || !state.initData) return;
 
   if ((state.saveStatus.get(key) || "idle") === "saved") return;
 
@@ -176,7 +178,7 @@ export async function saveCheck(index) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        tg_user_id: state.userId,
+        init_data: state.initData,
         check_url: url,
         check_text: cached.text,
       }),
