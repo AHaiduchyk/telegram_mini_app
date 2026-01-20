@@ -1,6 +1,6 @@
-import { state } from "./state.js";
-import { setStatus } from "./utils.js";
-import { submitScan, fetchHistory } from "./api.js";
+import { state } from "./state.js?v=20260120";
+import { setStatus } from "./utils.js?v=20260120";
+import { submitScan, fetchHistory } from "./api.js?v=20260120";
 
 export function handleQrText(rawText) {
   const now = Date.now();
@@ -44,7 +44,7 @@ export function initTelegram() {
   state.userId = tg.initDataUnsafe?.user?.id || null;
 
   // всередині fetchHistory() є check на userId — але норм так
-  fetchHistory();
+  fetchHistory({ render: true, limit: state.visibleCount, offset: 0 });
 
   if (!tg.showScanQrPopup) {
     setStatus("QR scanning is not supported in this Telegram version.");

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="uk" data-theme="ios">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+  />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+  <title>Аналіз витрат</title>
+
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <link rel="stylesheet" href="/css/themes.css" />
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+
+<body class="analysis-page">
+  <nav class="nav-bar analysis-nav">
+    <div class="nav-content">
+      <div class="nav-spacer" style="display: flex; justify-content: flex-start;">
+        <button class="nav-button" type="button" onclick="history.back()" aria-label="Назад">
+          <svg class="icon" viewBox="0 0 24 24">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+        </button>
+      </div>
+      <h1 class="nav-title">Аналіз витрат</h1>
+      <div class="nav-spacer" style="display: flex; justify-content: flex-end;">
+        <a class="nav-button" href="/" aria-label="На головну">
+          <svg class="icon" viewBox="0 0 24 24">
+            <path d="M3 9l9-7 9 7"></path>
+            <path d="M9 22V12h6v10"></path>
+          </svg>
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container analysis-container">
+    <div class="analysis-header">
+      <div class="analysis-title">Analytics</div>
+      <div class="analysis-subtitle" id="analysis-period">January 2026</div>
+    </div>
+
+    <div class="analysis-summary">
+      <div class="summary-card">
+        <div class="summary-icon summary-icon-income">
+          <svg class="icon" viewBox="0 0 24 24">
+            <path d="M4 14l6-6 4 4 6-6"></path>
+            <polyline points="14 6 20 6 20 12"></polyline>
+          </svg>
+        </div>
+        <div class="summary-title">Income</div>
+        <div class="summary-value" id="analysis-income">0 ₴</div>
+        <div class="summary-change positive" id="analysis-income-change">+0% from last month</div>
+      </div>
+
+      <div class="summary-card">
+        <div class="summary-icon summary-icon-expense">
+          <svg class="icon" viewBox="0 0 24 24">
+            <path d="M4 10l6 6 4-4 6 6"></path>
+            <polyline points="14 18 20 18 20 12"></polyline>
+          </svg>
+        </div>
+        <div class="summary-title">Expenses</div>
+        <div class="summary-value" id="analysis-expenses">0 ₴</div>
+        <div class="summary-change negative" id="analysis-expense-change">+0% from last month</div>
+      </div>
+    </div>
+
+    <div class="analysis-section">
+      <div class="analysis-card">
+        <div class="analysis-card-title">Expenses by Category</div>
+        <div id="analysis-status" class="status-text">Loading...</div>
+        <div class="analysis-chart-wrap">
+          <div id="analysis-chart"></div>
+        </div>
+        <div id="analysis-legend" class="analysis-legend"></div>
+      </div>
+    </div>
+
+    <div class="analysis-section">
+      <div class="analysis-card">
+        <div class="analysis-card-title">Monthly Trend</div>
+        <div class="analysis-trend" id="analysis-trend"></div>
+      </div>
+    </div>
+
+    <div class="analysis-section">
+      <div class="analysis-card">
+        <div class="analysis-card-title">Top Categories</div>
+        <div id="analysis-top" class="analysis-top"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/js/analysis.js?v=20260120"></script>
+</body>
+</html>

@@ -3,9 +3,13 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
+import os
 from dataclasses import dataclass
 from typing import Any, Mapping
 from urllib.parse import parse_qsl
+
+logger = logging.getLogger("qr_scanner.auth")
 
 
 @dataclass(frozen=True)
@@ -37,7 +41,12 @@ def _build_data_check_string(fields: Mapping[str, Any]) -> str:
     return "\n".join(pairs)
 
 
-def _compute_hash(data_check_string: str, bot_token: str) -> str:
+def _compute_hash_webapp(data_check_string: str, bot_token: str) -> str:
+    secret_key = hmac.new(b"WebAppData", bot_token.encode("utf-8"), hashlib.sha256).digest()
+    return hmac.new(secret_key, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def _compute_hash_legacy(data_check_string: str, bot_token: str) -> str:
     secret_key = hashlib.sha256(bot_token.encode("utf-8")).digest()
     return hmac.new(secret_key, data_check_string.encode("utf-8"), hashlib.sha256).hexdigest()
 
@@ -50,8 +59,18 @@ def validate_init_data(init_data: str, bot_token: str) -> dict[str, str]:
         raise InitDataValidationError("Missing initData hash", status_code=401)
 
     data_check_string = _build_data_check_string(fields)
-    expected_hash = _compute_hash(data_check_string, bot_token)
+    expected_hash = _compute_hash_webapp(data_check_string, bot_token)
     if not hmac.compare_digest(expected_hash, fields["hash"]):
+        legacy_hash = _compute_hash_legacy(data_check_string, bot_token)
+        if hmac.compare_digest(legacy_hash, fields["hash"]):
+            logger.warning("InitData validated with legacy hash algorithm")
+            return fields
+        if os.getenv("DEBUG_LOG_INIT_HASH") == "1":
+            logger.warning("DEBUG init_data_check_string=%s", data_check_string)
+            logger.warning("DEBUG init_data_expected_hash=%s", expected_hash)
+            logger.warning("DEBUG init_data_expected_hash_legacy=%s", legacy_hash)
+            logger.warning("DEBUG init_data_received_hash=%s", fields.get("hash"))
+            logger.warning("DEBUG init_data_fields=%s", fields)
         raise InitDataValidationError("Invalid initData hash", status_code=403)
 
     return fields
@@ -64,8 +83,18 @@ def validate_init_data_unsafe(init_data_unsafe: Mapping[str, Any], bot_token: st
         raise InitDataValidationError("Missing initData hash", status_code=401)
 
     data_check_string = _build_data_check_string(init_data_unsafe)
-    expected_hash = _compute_hash(data_check_string, bot_token)
+    expected_hash = _compute_hash_webapp(data_check_string, bot_token)
     if not hmac.compare_digest(expected_hash, str(init_data_unsafe["hash"])):
+        legacy_hash = _compute_hash_legacy(data_check_string, bot_token)
+        if hmac.compare_digest(legacy_hash, str(init_data_unsafe["hash"])):
+            logger.warning("InitData (unsafe) validated with legacy hash algorithm")
+            return init_data_unsafe
+        if os.getenv("DEBUG_LOG_INIT_HASH") == "1":
+            logger.warning("DEBUG init_data_unsafe_check_string=%s", data_check_string)
+            logger.warning("DEBUG init_data_unsafe_expected_hash=%s", expected_hash)
+            logger.warning("DEBUG init_data_unsafe_expected_hash_legacy=%s", legacy_hash)
+            logger.warning("DEBUG init_data_unsafe_received_hash=%s", init_data_unsafe.get("hash"))
+            logger.warning("DEBUG init_data_unsafe_fields=%s", init_data_unsafe)
         raise InitDataValidationError("Invalid initData hash", status_code=403)
 
     return init_data_unsafe

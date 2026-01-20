@@ -3,12 +3,19 @@ export const state = {
   initData: null,
   userId: null,
   scans: [],
+  allScans: [],
+  visibleCount: 5,
+  pageSize: 5,
+  loadedCount: 0,
+  hasMore: false,
   lastText: null,
   lastTextAt: 0,
   selectedScan: null,
 
   // caches/statuses
   checkCache: new Map(),
+  checkParsed: new Map(),
+  checkRaw: new Map(),
   findStatus: new Map(),
   saveStatus: new Map(),
 

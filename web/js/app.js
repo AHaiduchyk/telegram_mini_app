@@ -1,8 +1,9 @@
-import { state } from "./state.js";
-import { closeAllMenus } from "./menu.js";
-import { initTheme } from "./theme.js";
-import { initTelegram } from "./telegram.js";
-import { renderHistory } from "./render.js";
+import { state } from "./state.js?v=20260120";
+import { closeAllMenus } from "./menu.js?v=20260120";
+import { initTheme } from "./theme.js?v=20260120";
+import { initTelegram } from "./telegram.js?v=20260120";
+import { renderHistory } from "./render.js?v=20260120";
+import { fetchHistory } from "./api.js?v=20260120";
 
 function bindDom() {
   state.notTelegramEl = document.getElementById("not-telegram");
@@ -45,6 +46,38 @@ function init() {
   renderHistory(); // initial empty state (render.js also attaches delegated click handler)
 
   initTelegram();
+
+  startStatusPolling();
 }
 
 init();
+
+function startStatusPolling() {
+  const pollMs = 5000;
+  setInterval(async () => {
+    if (!state.initData) return;
+    if (!hasPending()) return;
+    await fetchHistory({
+      render: !state.openMenuKey,
+      limit: state.visibleCount,
+      offset: 0,
+    });
+  }, pollMs);
+}
+
+function hasPending() {
+  const visibleKeys = new Set();
+  for (const scan of state.scans) {
+    if (scan?.raw_text) visibleKeys.add(scan.raw_text);
+  }
+  for (const [key, status] of state.findStatus.entries()) {
+    if (visibleKeys.has(key) && status === "loading") return true;
+  }
+  for (const [key, status] of state.saveStatus.entries()) {
+    if (visibleKeys.has(key) && status === "loading") return true;
+  }
+  for (const scan of state.scans) {
+    if (scan?.info?.check_status?.finding) return true;
+  }
+  return false;
+}

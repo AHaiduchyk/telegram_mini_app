@@ -5,4 +5,5 @@ python-telegram-bot==20.7
 python-dotenv==1.0.1
 selenium==4.16.0
 webdriver-manager==4.0.1
-seleniumbase==4.* 
+seleniumbase==4.*
+rapidfuzz==3.9.7

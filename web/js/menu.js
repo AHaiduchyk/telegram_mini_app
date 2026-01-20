@@ -1,4 +1,4 @@
-import { state } from "./state.js";
+import { state } from "./state.js?v=20260120";
 
 export function closeAllMenus() {
   document.querySelectorAll(".dropdown-menu").forEach((menu) => {

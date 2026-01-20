@@ -15,3 +15,7 @@ __pycache__/
 *.db
 
 downloaded_files
+tax_xml_files.py
+test2.py
+.gitignore
+.gitignore

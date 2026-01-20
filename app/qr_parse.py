@@ -7,6 +7,12 @@ from urllib.parse import parse_qs, urlparse
 URL_REGEX = re.compile(r"^(https?://|www\.)", re.IGNORECASE)
 WIFI_REGEX = re.compile(r"^WIFI:(?P<fields>.+);;$", re.IGNORECASE)
 VCARD_REGEX = re.compile(r"BEGIN:VCARD", re.IGNORECASE)
+TAX_SHORT_REGEX = re.compile(
+    r"^FN(?P<fn>\d+)\s+N(?P<id>\d+)\s+=?(?P<sm>\d+[.,]\d+)\s+"
+    r"(?P<date>\d{1,2}\.\d{1,2}\.\d{4})\s+(?P<time>\d{1,2}:\d{2}:\d{2})"
+    r"(?:\s+MAC=(?P<mac>\S+))?\s*$",
+    re.IGNORECASE,
+)
 
 
 def normalize_url(text: str) -> str | None:
@@ -24,6 +30,20 @@ def normalize_url(text: str) -> str | None:
             return None
         return f"https://{candidate}"
     return None
+
+
+def _extract_check_id_from_url(url: str) -> str | None:
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return None
+    if parsed.hostname != "cabinet.tax.gov.ua":
+        return None
+    if parsed.path != "/cashregs/check":
+        return None
+    qs = parse_qs(parsed.query)
+    check_id = (qs.get("id") or [None])[0]
+    return str(check_id) if check_id else None
 
 
 def parse_wifi(text: str) -> Dict[str, Any] | None:
@@ -90,10 +110,43 @@ def parse_vcard(text: str) -> Dict[str, Any] | None:
     return info or None
 
 
+def parse_tax_short(text: str) -> Dict[str, Any] | None:
+    match = TAX_SHORT_REGEX.match(text.strip())
+    if not match:
+        return None
+    fn = match.group("fn")
+    check_id = match.group("id")
+    sm = match.group("sm").replace(",", ".")
+    date = match.group("date")
+    time = match.group("time")
+    day, month, year = date.split(".")
+    date_compact = f"{year}{month.zfill(2)}{day.zfill(2)}"
+    hh, mm, ss = time.split(":")
+    time_compact = f"{hh.zfill(2)}{mm.zfill(2)}{ss.zfill(2)}"
+    url = (
+        "https://cabinet.tax.gov.ua/cashregs/check"
+        f"?fn={fn}&id={check_id}&sm={sm}&time={time_compact}&date={date_compact}"
+    )
+    return {
+        "url": url,
+        "fn": fn,
+        "id": check_id,
+        "check_id": check_id,
+        "sm": sm,
+        "date": date_compact,
+        "time": time_compact,
+        "mac": match.group("mac"),
+    }
+
+
 def parse_qr_text(text: str) -> Tuple[str, Dict[str, Any]]:
     url = normalize_url(text)
     if url:
-        return "url", {"url": url}
+        info: Dict[str, Any] = {"url": url}
+        check_id = _extract_check_id_from_url(url)
+        if check_id:
+            info["check_id"] = check_id
+        return "url", info
 
     wifi = parse_wifi(text)
     if wifi:
@@ -106,5 +159,9 @@ def parse_qr_text(text: str) -> Tuple[str, Dict[str, Any]]:
     vcard = parse_vcard(text)
     if vcard:
         return "vcard", vcard
+
+    tax_short = parse_tax_short(text)
+    if tax_short:
+        return "url", tax_short
 
     return "text", {"text": text}

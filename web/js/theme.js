@@ -1,5 +1,5 @@
-import { state } from "./state.js";
-import { setStatus } from "./utils.js";
+import { state } from "./state.js?v=20260120";
+import { setStatus } from "./utils.js?v=20260120";
 
 export function applyTheme(themeName) {
   document.documentElement.setAttribute("data-theme", themeName);

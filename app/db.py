@@ -15,6 +15,12 @@ engine = create_engine(DATABASE_URL, echo=False, connect_args=connect_args)
 
 def init_db() -> None:
     SQLModel.metadata.create_all(engine)
+    try:
+        from app.seed_categories import seed_categories
+    except Exception:
+        return
+    with Session(engine) as session:
+        seed_categories(session)
 
 
 def get_session() -> Session:

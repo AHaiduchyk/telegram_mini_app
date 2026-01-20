@@ -1,4 +1,4 @@
-import { state } from "./state.js";
+import { state } from "./state.js?v=20260120";
 import {
   escapeHtml,
   truncate,
@@ -7,8 +7,8 @@ import {
   getItemType,
   getItemTitle,
 } from "./utils.js";
-import { toggleMenu, closeAllMenus } from "./menu.js";
-import { findCheck, saveCheck } from "./api.js";
+import { toggleMenu, closeAllMenus } from "./menu.js?v=20260120";
+import { fetchCheckParsed, fetchCheckRaw, fetchHistory, findCheck, saveCheck } from "./api.js?v=20260120";
 
 export function renderHistory() {
   const c = state.historyContainer;
@@ -33,15 +33,12 @@ export function renderHistory() {
     const type = getItemType(scan);
     const title = getItemTitle(scan);
 
-    const canFind = Boolean(getValidCheckUrl(scan.raw_text));
-    const { founded: dbFounded, saved: dbSaved } = pickDbStatus(scan);
-
-    // align status maps with DB status
-    if (dbFounded && !state.findStatus.has(key)) state.findStatus.set(key, "founded");
-    if (dbSaved && !state.saveStatus.has(key)) state.saveStatus.set(key, "saved");
-
-    const findSt = state.findStatus.get(key) || (dbFounded ? "founded" : "idle");
-    const saveSt = state.saveStatus.get(key) || (dbSaved ? "saved" : "idle");
+    const canFind = Boolean(scan?.info?.url || getValidCheckUrl(scan.raw_text));
+    const dbStatus = pickDbStatus(scan);
+    const findSt =
+      state.findStatus.get(key) ||
+      (dbStatus.finding ? "loading" : dbStatus.founded ? "founded" : "idle");
+    const saveSt = state.saveStatus.get(key) || (dbStatus.saved ? "saved" : "idle");
 
     const iconColor = type === "link" ? "var(--ios-blue)" : "var(--ios-text-secondary)";
     const iconPath =
@@ -77,7 +74,7 @@ export function renderHistory() {
           </button>
 
           <div id="menu-${safeKey}" class="dropdown-menu">
-            ${canFind ? generateMenuItems(index, key, findSt, saveSt) : ""}
+            ${canFind ? generateMenuItems(index, key, findSt, saveSt, dbStatus.exists) : ""}
 
             <button class="menu-item" data-action="copy" data-index="${index}">
               <svg class="icon icon-small" viewBox="0 0 24 24">
@@ -101,6 +98,15 @@ export function renderHistory() {
 
     c.appendChild(item);
   });
+
+  if (state.hasMore || state.allScans.length > state.visibleCount) {
+    const btn = document.createElement("button");
+    btn.className = "btn-view history-load-more";
+    btn.dataset.action = "load-more";
+    btn.type = "button";
+    btn.textContent = "Load more";
+    c.appendChild(btn);
+  }
 
   // avoid stacking handlers on re-render
   c.onclick = null;
@@ -168,17 +174,31 @@ export function renderHistory() {
       await saveCheck(index);
       return;
     }
+
+    if (action === "load-more") {
+      const next = state.visibleCount + state.pageSize;
+      state.visibleCount = next;
+      if (state.visibleCount > state.allScans.length && state.hasMore) {
+        await fetchHistory({
+          append: true,
+          limit: state.pageSize,
+          offset: state.loadedCount,
+        });
+      } else {
+        state.scans = state.allScans.slice(0, state.visibleCount);
+        renderHistory();
+      }
+      return;
+    }
   };
 }
 
-export function generateMenuItems(index, key, findStatus, saveStatus) {
-  const cached = state.checkCache.get(key);
-  const hasXml = Boolean(cached?.text);
-  const canSave = findStatus === "founded" && hasXml && saveStatus !== "saved";
+export function generateMenuItems(index, key, findStatus, saveStatus, exists) {
+  const canSave = findStatus === "founded" && saveStatus !== "saved";
 
   let findText = "Find check";
   let findClass = "";
-  let findDisabled = "";
+  let findDisabled = exists ? "disabled" : "";
   let findIcon = "";
 
   if (findStatus === "loading") {
@@ -188,6 +208,7 @@ export function generateMenuItems(index, key, findStatus, saveStatus) {
   } else if (findStatus === "founded") {
     findText = "✓ Founded";
     findClass = "success";
+    findDisabled = "disabled";
   } else if (findStatus === "failed") {
     findText = "Retry";
     findClass = "danger";
@@ -230,51 +251,96 @@ export function showDetails(scan) {
   state.selectedScan = scan;
   if (state.detailsContainer) state.detailsContainer.classList.remove("hidden");
 
-  const infoData = { ...(scan.info || {}) };
-  if (!infoData.url) {
-    const derivedUrl = getValidCheckUrl(scan.raw_text);
-    if (derivedUrl) infoData.url = derivedUrl;
-  }
-  const infoEntries = Object.entries(infoData);
-  const infoGrid = infoEntries.length
-    ? `<div class="details-grid">${infoEntries
-        .map(([key, value]) => {
-          const safeValue = Array.isArray(value) ? value.join(", ") : String(value);
-          return `
-            <div class="details-item">
-              <div class="details-item-key">${escapeHtml(key)}</div>
-              <div class="details-item-value">${escapeHtml(safeValue)}</div>
-            </div>
-          `;
-        })
-        .join("")}</div>`
-    : "";
-
   const cached = state.checkCache.get(scan.raw_text);
   const receiptBlock = cached ? renderReceipt(cached) : "";
 
   if (!state.detailsContent) return;
 
+  const info = scan.info || {};
+  const derivedUrl = getValidCheckUrl(scan.raw_text);
+  const displayUrl = info.url || info.source_url || derivedUrl || "";
+  const checkId = info.check_id || extractCheckId(displayUrl) || "—";
+  const { founded, saved } = pickDbStatus(scan);
+  const scannedAt = new Date(scan.created_at).toLocaleString();
+  const parsedSummary =
+    checkId && checkId !== "—" ? state.checkParsed.get(String(checkId)) : null;
+  const rawXml = checkId && checkId !== "—" ? state.checkRaw.get(String(checkId)) : null;
+  const cachedParsed = resolveParsed(parsedSummary, checkId);
+  if (cachedParsed && checkId && checkId !== "—") {
+    state.checkParsed.set(String(checkId), cachedParsed);
+  }
+
   state.detailsContent.innerHTML = `
-    <div class="details-section">
-      <div class="details-label">${escapeHtml(scan.type)}</div>
+    <div class="details-grid details-tiles">
+      <div class="details-item">
+        <div class="details-item-key">Scanned</div>
+        <div class="details-item-value">${escapeHtml(scannedAt)}</div>
+      </div>
+      <div class="details-item">
+        <div class="details-item-key">Check ID</div>
+        <div class="details-item-value">${escapeHtml(String(checkId))}</div>
+      </div>
+      <div class="details-item">
+        <div class="details-item-key">Found</div>
+        <div class="details-item-value">${founded ? "Yes" : "No"}</div>
+      </div>
+      <div class="details-item">
+        <div class="details-item-key">Saved</div>
+        <div class="details-item-value">${saved ? "Yes" : "No"}</div>
+      </div>
     </div>
-    <div class="details-section">
-      <div class="details-label">Raw Text</div>
-      <div class="details-value">${escapeHtml(scan.raw_text)}</div>
-    </div>
-    <div class="details-section">
-      <div class="details-label">Scanned</div>
-      <div class="details-value">${new Date(scan.created_at).toLocaleString()}</div>
-    </div>
-    ${infoGrid}
+    ${renderCheckContent(checkId, cachedParsed, rawXml, founded, saved)}
     ${receiptBlock}
   `;
+
+  state.detailsContent.onclick = null;
+  state.detailsContent.onclick = async (e) => {
+    const btn = e.target.closest("[data-action='load-check'], [data-action='load-raw']");
+    if (!btn) return;
+    const id = btn.dataset.checkId;
+    if (!id) return;
+    btn.disabled = true;
+    btn.textContent = "Loading...";
+    if (btn.dataset.action === "load-check") {
+      const parsed = await fetchCheckParsed(id);
+      if (parsed) {
+        showDetails(scan);
+        return;
+      }
+      btn.textContent = "Not ready";
+      setTimeout(() => {
+        btn.textContent = "Load check content";
+        btn.disabled = false;
+      }, 1500);
+      return;
+    }
+    if (btn.dataset.action === "load-raw") {
+      const raw = await fetchCheckRaw(id);
+      if (raw !== null) {
+        showDetails(scan);
+        return;
+      }
+      btn.textContent = "Not ready";
+      setTimeout(() => {
+        btn.textContent = "Load raw data";
+        btn.disabled = false;
+      }, 1500);
+    }
+  };
+}
+
+function extractCheckId(checkUrl) {
+  if (!checkUrl) return null;
+  try {
+    const url = new URL(checkUrl);
+    return url.searchParams.get("id");
+  } catch {
+    return null;
+  }
 }
 
 function renderReceipt(cached) {
   const parsed = cached.parsed;
-  const xmlText = cached.text;
 
   if (parsed && (parsed.head || parsed.items || parsed.pay_rows)) {
     return `
@@ -287,21 +353,118 @@ function renderReceipt(cached) {
     `;
   }
 
-  if (xmlText) {
-    const summary = parseXmlToSummary(xmlText);
-    if (summary) {
+  return "";
+}
+
+function renderCheckContent(checkId, parsed, rawXml, founded, saved) {
+  if (!checkId || checkId === "—") {
+    return `
+      <div class="details-placeholder">
+        <div class="details-label">Check content</div>
+        <div class="details-value">No check id.</div>
+      </div>
+    `;
+  }
+  if (!parsed) {
+    if (!founded || !saved) {
       return `
-        <div class="divider"></div>
-        <div class="receipt-section-title">Receipt</div>
-        ${renderSection("CHECKHEAD", summary.head)}
-        ${renderSection("CHECKTOTAL", summary.total)}
-        ${renderTableSection("CHECKPAY", summary.payRows, ["PAYFORMNM", "SUM"])}
-        ${renderTableSection("CHECKBODY", summary.bodyRows, ["CODE", "NAME", "AMOUNT", "UNITNM", "PRICE", "COST", "LETTERS"])}
+        <div class="details-placeholder">
+          <div class="details-label">Check content</div>
+          <div class="details-value">Available after find + save.</div>
+        </div>
       `;
     }
+    return `
+      <div class="details-placeholder">
+        <div class="details-label">Check content</div>
+        <button class="btn-view" data-action="load-check" data-check-id="${escapeHtml(
+          String(checkId)
+        )}" type="button">Load check content</button>
+      </div>
+    `;
   }
 
-  return "";
+  const items = parsed.items || [];
+  const itemsHtml = items.length
+    ? `<div class="details-list">${items
+        .map((item) => {
+          const name = escapeHtml(item.name || "—");
+          const qty = escapeHtml(item.qty || "—");
+          const price = escapeHtml(item.price || "—");
+          const sum = escapeHtml(item.sum || "—");
+          return `
+            <div class="details-row">
+              <div class="details-row-title">${name}</div>
+              <div class="details-row-meta">qty ${qty} • price ${price} • sum ${sum}</div>
+            </div>
+          `;
+        })
+        .join("")}</div>`
+    : `<div class="details-value">No items.</div>`;
+
+  const rawBlock = renderRawContent(checkId, rawXml, founded);
+
+  return `
+    <div class="details-placeholder">
+      <div class="details-label">Check content</div>
+      <div class="details-value">Total: ${escapeHtml(parsed.total_sum || "—")} ${escapeHtml(
+        parsed.currency || ""
+      )}</div>
+      ${itemsHtml}
+    </div>
+    ${rawBlock}
+  `;
+}
+
+function renderRawContent(checkId, rawXml, founded) {
+  if (!founded) {
+    return `
+      <div class="details-placeholder">
+        <div class="details-label">Raw data</div>
+        <div class="details-value">Available after find.</div>
+      </div>
+    `;
+  }
+  if (!rawXml) {
+    return `
+      <div class="details-placeholder">
+        <div class="details-label">Raw data</div>
+        <button class="btn-view" data-action="load-raw" data-check-id="${escapeHtml(
+          String(checkId)
+        )}" type="button">Load raw data</button>
+      </div>
+    `;
+  }
+  return `
+    <div class="details-placeholder">
+      <div class="details-label">Raw data</div>
+      <pre class="details-pre">${escapeHtml(rawXml)}</pre>
+    </div>
+  `;
+}
+
+function resolveParsed(parsed, checkId) {
+  if (isParsedReady(parsed)) return parsed;
+  const cached = readParsedCache(checkId);
+  return isParsedReady(cached) ? cached : null;
+}
+
+function isParsedReady(parsed) {
+  if (!parsed || typeof parsed !== "object") return false;
+  if (Array.isArray(parsed.items) && parsed.items.length) return true;
+  return Boolean(parsed.total_sum || parsed.source_format);
+}
+
+function readParsedCache(checkId) {
+  if (!checkId || checkId === "—") return null;
+  try {
+    const raw = localStorage.getItem(`parsedCheck:${checkId}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 function renderSection(title, data) {
@@ -341,45 +504,4 @@ function renderTableSection(title, rows, columns) {
       </table>
     </div>
   `;
-}
-
-function parseXmlToSummary(xmlText) {
-  try {
-    const doc = new DOMParser().parseFromString(xmlText, "text/xml");
-    if (doc.querySelector("parsererror")) return null;
-
-    const getText = (sel) => {
-      const el = doc.querySelector(sel);
-      return el ? (el.textContent || "").trim() : "";
-    };
-
-    return {
-      head: {
-        ORGNM: getText("CHECKHEAD > ORGNM"),
-        TIN: getText("CHECKHEAD > TIN"),
-        POINTNM: getText("CHECKHEAD > POINTNM"),
-        POINTADDR: getText("CHECKHEAD > POINTADDR"),
-        ORDERDATE: getText("CHECKHEAD > ORDERDATE"),
-        ORDERTIME: getText("CHECKHEAD > ORDERTIME"),
-        CASHREGISTERNUM: getText("CHECKHEAD > CASHREGISTERNUM"),
-        ORDERNUM: getText("CHECKHEAD > ORDERNUM"),
-      },
-      total: { SUM: getText("CHECKTOTAL > SUM") },
-      bodyRows: [...doc.querySelectorAll("CHECKBODY > ROW")].map((row) => ({
-        CODE: row.querySelector("CODE")?.textContent?.trim() || "",
-        NAME: row.querySelector("NAME")?.textContent?.trim() || "",
-        AMOUNT: row.querySelector("AMOUNT")?.textContent?.trim() || "",
-        UNITNM: row.querySelector("UNITNM")?.textContent?.trim() || "",
-        PRICE: row.querySelector("PRICE")?.textContent?.trim() || "",
-        COST: row.querySelector("COST")?.textContent?.trim() || "",
-        LETTERS: row.querySelector("LETTERS")?.textContent?.trim() || "",
-      })),
-      payRows: [...doc.querySelectorAll("CHECKPAY > ROW")].map((row) => ({
-        PAYFORMNM: row.querySelector("PAYFORMNM")?.textContent?.trim() || "",
-        SUM: row.querySelector("SUM")?.textContent?.trim() || "",
-      })),
-    };
-  } catch {
-    return null;
-  }
 }

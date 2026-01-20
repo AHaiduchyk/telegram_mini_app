@@ -35,3 +35,18 @@ class TaxCheck(SQLModel, table=True):
 
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
     updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+
+class Category(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    parent_id: Optional[int] = Field(default=None, foreign_key="category.id", index=True)
+    name: str = Field(max_length=255, index=True)
+
+
+class ItemCategoryMap(SQLModel, table=True):
+    key: str = Field(primary_key=True, max_length=255)
+    category_id: int = Field(foreign_key="category.id", index=True)
+    confidence: float
+    method: str = Field(max_length=32)
+    example_name: Optional[str] = Field(default=None, max_length=512)
+    updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)

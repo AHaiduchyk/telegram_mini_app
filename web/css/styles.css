@@ -425,6 +425,10 @@ body {
   margin-top: 12px;
 }
 
+.details-tiles {
+  margin-bottom: 16px;
+}
+
 .details-item {
   background: var(--ios-secondary-bg);
   border-radius: 10px;
@@ -438,9 +442,278 @@ body {
 }
 
 .details-item-value {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.details-placeholder {
+  background: var(--ios-secondary-bg);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.details-list {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.details-row-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.details-row-meta {
   font-size: 13px;
   color: var(--ios-text-secondary);
+}
+
+.details-pre {
+  white-space: pre-wrap;
   word-break: break-word;
+  font-size: 12px;
+  color: var(--ios-text-secondary);
+  margin-top: 10px;
+}
+
+.analysis-card {
+  background: var(--card-bg);
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: var(--card-shadow);
+}
+
+.analysis-chart-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 16px 0;
+}
+
+.analysis-legend {
+  display: grid;
+  gap: 10px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--ios-text);
+}
+
+.legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.legend-label {
+  flex: 1;
+  color: var(--ios-text-secondary);
+}
+
+.legend-value {
+  color: var(--ios-text);
+  font-weight: 600;
+}
+
+.analysis-page {
+  background: #f4f5fb;
+  color: #1f2937;
+}
+
+.analysis-nav {
+  background: #ffffff;
+  border-bottom: 1px solid #e6e8f0;
+}
+
+.analysis-container {
+  display: grid;
+  gap: 18px;
+}
+
+.analysis-header {
+  display: grid;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.analysis-title {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.analysis-subtitle {
+  font-size: 15px;
+  color: #6b7280;
+}
+
+.analysis-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+}
+
+.summary-card {
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 16px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+  display: grid;
+  gap: 6px;
+}
+
+.summary-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.summary-icon-income {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.summary-icon-expense {
+  background: #fee2e2;
+  color: #ef4444;
+}
+
+.summary-title {
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.summary-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.summary-change {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.summary-change.positive {
+  color: #16a34a;
+}
+
+.summary-change.negative {
+  color: #ef4444;
+}
+
+.analysis-section {
+  display: block;
+}
+
+.analysis-card {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 18px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+.analysis-card-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 8px;
+}
+
+.analysis-chart-wrap {
+  margin: 12px 0 4px;
+}
+
+.analysis-legend {
+  display: grid;
+  gap: 10px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: #111827;
+}
+
+.legend-label {
+  color: #6b7280;
+}
+
+.analysis-trend {
+  margin-top: 8px;
+  overflow-x: auto;
+}
+
+.analysis-top {
+  display: grid;
+  gap: 14px;
+}
+
+.top-row {
+  display: grid;
+  gap: 8px;
+}
+
+.top-row-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.top-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+}
+
+.top-label {
+  flex: 1;
+  font-weight: 600;
+  color: #111827;
+}
+
+.top-meta {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.top-value {
+  font-weight: 700;
+  color: #111827;
+}
+
+.top-bar {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: #f1f3f9;
+  overflow: hidden;
+}
+
+.top-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+}
+
+@media (max-width: 480px) {
+  .analysis-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.history-load-more {
+  margin-top: 12px;
+  width: 100%;
 }
 
 .divider {
