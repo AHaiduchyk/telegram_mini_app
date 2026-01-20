@@ -348,6 +348,22 @@ def _status_map_for_user(session: Session, tg_user_id: int) -> Dict[str, Dict[st
     return out
 
 
+def _normalize_scan_info(raw_info: Any) -> Dict[str, Any]:
+    if raw_info is None:
+        return {}
+    if isinstance(raw_info, dict):
+        return dict(raw_info)
+    if isinstance(raw_info, str):
+        try:
+            parsed = json.loads(raw_info)
+        except json.JSONDecodeError:
+            parsed = None
+        if isinstance(parsed, dict):
+            return dict(parsed)
+    logger.warning("Unexpected scan info payload: %s", type(raw_info).__name__)
+    return {}
+
+
 @app.post("/api/scan", response_model=ScanResponse)
 def create_scan(payload: ScanCreate, session: Session = Depends(get_session)) -> ScanResponse:
     user_id = get_verified_user_id(payload.init_data, payload.init_data_unsafe)
@@ -401,7 +417,7 @@ def get_history(
 
     out: List[ScanResponse] = []
     for s in scans:
-        info = dict(s.info or {})
+        info = _normalize_scan_info(s.info)
         try:
             if s.raw_text and "cabinet.tax.gov.ua/cashregs/check" in s.raw_text:
                 cid = extract_check_id(s.raw_text)
