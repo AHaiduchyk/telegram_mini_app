@@ -6,14 +6,14 @@ import os
 import time
 from dataclasses import dataclass
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import parse_qs, urlparse
 
 from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
@@ -24,7 +24,7 @@ from sqlmodel import Session, select
 from app.auth import InitDataValidationError, extract_user_id, validate_init_data, validate_init_data_unsafe
 from app.categorizer import build_category_maps, get_or_predict_category_cached, OTHER_PATH
 from app.db import engine, get_session, init_db
-from app.models import Scan, TaxCheck
+from app.models import Expense, Scan, TaxCheck
 from app.qr_parse import parse_qr_text
 from app.tax_xml_parser import parse_tax_xml
 
@@ -57,14 +57,8 @@ try:
 except Exception:
     logger.exception("Failed to initialize file logging")
 
-# --- Static (Mini App) ---
-static_dir = Path(__file__).resolve().parent.parent / "web"
-if static_dir.exists():
-    app.mount("/css", StaticFiles(directory=static_dir / "css"), name="css")
-    app.mount("/js", StaticFiles(directory=static_dir / "js"), name="js")
-    assets_dir = static_dir / "assets"
-    if assets_dir.exists():
-        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+# --- Static (Frontend) ---
+frontend_dist = Path(__file__).resolve().parent.parent / "figma_design" / "dist"
 
 # --- CORS ---
 miniapp_origin = os.getenv("MINIAPP_ORIGIN", "")
@@ -107,25 +101,34 @@ class SaveCheckRequest(BaseModel):
     check_text: str = Field(..., max_length=2_000_000)
 
 
+class ExpenseCreate(BaseModel):
+    init_data: Optional[str] = None
+    init_data_unsafe: Optional[Dict[str, Any]] = None
+    check_id: str = Field(..., max_length=255)
+    amount: Optional[str] = Field(default=None, max_length=64)
+    url: Optional[str] = Field(default=None, max_length=4096)
+    merchant: Optional[str] = Field(default=None, max_length=255)
+    receipt_date: Optional[str] = Field(default=None, max_length=32)
+    type: str = Field(default="qr_scan", max_length=32)
+    confirm_duplicate: bool = False
+
+
+class ExpenseResponse(BaseModel):
+    id: int
+    check_id: str
+    amount: Optional[str]
+    url: Optional[str]
+    merchant: Optional[str]
+    receipt_date: Optional[str]
+    type: str
+    created_at: str
+
+
+
+
 @app.on_event("startup")
 def on_startup() -> None:
     init_db()
-
-
-@app.get("/")
-def root() -> FileResponse:
-    index_path = static_dir / "index.html"
-    if index_path.exists():
-        return FileResponse(index_path)
-    raise HTTPException(status_code=404, detail="index.html not found")
-
-
-@app.get("/analysis.html")
-def analysis_page() -> FileResponse:
-    analysis_path = static_dir / "analysis.html"
-    if analysis_path.exists():
-        return FileResponse(analysis_path)
-    raise HTTPException(status_code=404, detail="analysis.html not found")
 
 
 @app.exception_handler(Exception)
@@ -204,6 +207,15 @@ def _try_extract_check_id(check_url: str) -> Optional[str]:
     try:
         return extract_check_id(check_url)
     except HTTPException:
+        return None
+
+
+def _parse_amount(value: Optional[str]) -> Optional[Decimal]:
+    if value is None:
+        return None
+    try:
+        return Decimal(str(value).replace(",", ".")).quantize(Decimal("0.01"))
+    except (InvalidOperation, ValueError):
         return None
 
 
@@ -1030,3 +1042,111 @@ def save_check(
         "founded": bool(row.xml_text),
         "saved": _parsed_ready(row.parsed),
     }
+
+
+@app.post("/api/expense", response_model=ExpenseResponse)
+def create_expense(
+    payload: ExpenseCreate,
+    session: Session = Depends(get_session),
+) -> ExpenseResponse:
+    user_id = get_verified_user_id(payload.init_data, payload.init_data_unsafe)
+
+    check_id = payload.check_id.strip()
+    if not check_id:
+        raise HTTPException(status_code=400, detail="Missing check_id")
+
+    existing = session.exec(
+        select(Expense).where(
+            Expense.tg_user_id == user_id,
+            Expense.check_id == check_id,
+        )
+    ).all()
+    existing_count = len(existing)
+    if existing_count and not payload.confirm_duplicate:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "Expense already exists",
+                "existing_count": existing_count,
+            },
+        )
+
+    amount_value = _parse_amount(payload.amount)
+    expense = Expense(
+        tg_user_id=user_id,
+        check_id=check_id,
+        amount=amount_value,
+        url=payload.url,
+        merchant=payload.merchant,
+        receipt_date=payload.receipt_date,
+        type=payload.type or "qr_scan",
+    )
+    session.add(expense)
+    session.commit()
+    session.refresh(expense)
+
+    amount_out = f"{expense.amount:.2f}" if expense.amount is not None else None
+    return ExpenseResponse(
+        id=expense.id,
+        check_id=expense.check_id,
+        amount=amount_out,
+        url=expense.url,
+        merchant=expense.merchant,
+        receipt_date=expense.receipt_date,
+        type=expense.type,
+        created_at=expense.created_at.isoformat(),
+    )
+
+
+@app.get("/api/expenses", response_model=List[ExpenseResponse])
+def list_expenses(
+    init_data: Optional[str] = Query(None, alias="init_data"),
+    init_data_unsafe: Optional[str] = Query(None, alias="init_data_unsafe"),
+    limit: Optional[int] = Query(None, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    session: Session = Depends(get_session),
+) -> List[ExpenseResponse]:
+    parsed_unsafe: Optional[Dict[str, Any]] = None
+    if init_data_unsafe:
+        try:
+            parsed_unsafe = json.loads(init_data_unsafe)
+        except json.JSONDecodeError as exc:
+            logger.warning("Expenses init_data_unsafe JSON decode failed: %s", exc)
+            raise HTTPException(status_code=400, detail="Invalid init_data_unsafe") from exc
+
+    user_id = get_verified_user_id(init_data, parsed_unsafe)
+
+    statement = select(Expense).where(Expense.tg_user_id == user_id).order_by(Expense.created_at.desc())
+    if limit:
+        statement = statement.offset(offset).limit(limit)
+    rows = session.exec(statement).all()
+
+    out: List[ExpenseResponse] = []
+    for row in rows:
+        amount_out = f"{row.amount:.2f}" if row.amount is not None else None
+        out.append(
+            ExpenseResponse(
+                id=row.id,
+                check_id=row.check_id,
+                amount=amount_out,
+                url=row.url,
+                merchant=row.merchant,
+                receipt_date=row.receipt_date,
+                type=row.type,
+                created_at=row.created_at.isoformat(),
+            )
+        )
+    return out
+
+
+if frontend_dist.exists():
+    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
+else:
+    logger.warning("Frontend build not found at %s", frontend_dist)
+
+    @app.get("/")
+    def frontend_missing() -> Dict[str, str]:
+        raise HTTPException(
+            status_code=503,
+            detail="Frontend build not found. Run: cd figma_design && npm install && npm run build",
+        )

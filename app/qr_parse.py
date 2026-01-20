@@ -32,7 +32,7 @@ def normalize_url(text: str) -> str | None:
     return None
 
 
-def _extract_check_id_from_url(url: str) -> str | None:
+def _extract_check_fields_from_url(url: str) -> Dict[str, str] | None:
     try:
         parsed = urlparse(url)
     except ValueError:
@@ -42,7 +42,19 @@ def _extract_check_id_from_url(url: str) -> str | None:
     if parsed.path != "/cashregs/check":
         return None
     qs = parse_qs(parsed.query)
-    check_id = (qs.get("id") or [None])[0]
+    fields = {}
+    for key in ("fn", "id", "sm", "time", "date", "mac"):
+        value = (qs.get(key) or [None])[0]
+        if value is not None:
+            fields[key] = str(value)
+    return fields or None
+
+
+def _extract_check_id_from_url(url: str) -> str | None:
+    fields = _extract_check_fields_from_url(url)
+    if not fields:
+        return None
+    check_id = fields.get("id")
     return str(check_id) if check_id else None
 
 
@@ -143,9 +155,15 @@ def parse_qr_text(text: str) -> Tuple[str, Dict[str, Any]]:
     url = normalize_url(text)
     if url:
         info: Dict[str, Any] = {"url": url}
-        check_id = _extract_check_id_from_url(url)
-        if check_id:
-            info["check_id"] = check_id
+        fields = _extract_check_fields_from_url(url)
+        if fields:
+            info.update(fields)
+            if fields.get("id"):
+                info["check_id"] = fields["id"]
+        else:
+            check_id = _extract_check_id_from_url(url)
+            if check_id:
+                info["check_id"] = check_id
         return "url", info
 
     wifi = parse_wifi(text)

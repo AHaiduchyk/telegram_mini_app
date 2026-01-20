@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Any, Dict, Optional
 
-from sqlalchemy import Column
+from sqlalchemy import Column, Numeric
 from sqlalchemy.dialects.sqlite import JSON
 from sqlmodel import Field, SQLModel
 
@@ -50,3 +51,15 @@ class ItemCategoryMap(SQLModel, table=True):
     method: str = Field(max_length=32)
     example_name: Optional[str] = Field(default=None, max_length=512)
     updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+
+class Expense(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    tg_user_id: int = Field(index=True)
+    check_id: str = Field(max_length=255, index=True)
+    amount: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(12, 2)))
+    url: Optional[str] = Field(default=None, max_length=4096)
+    merchant: Optional[str] = Field(default=None, max_length=255)
+    receipt_date: Optional[str] = Field(default=None, max_length=32)
+    type: str = Field(default="qr_scan", max_length=32)
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)

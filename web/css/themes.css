@@ -1,19 +1,19 @@
 :root {
   /* fallback */
-  --ios-bg: #000;
-  --ios-card-bg: #1c1c1e;
-  --ios-border: #38383a;
-  --ios-text: #fff;
-  --ios-text-secondary: #8e8e93;
-  --ios-text-tertiary: #636366;
-  --ios-blue: #007aff;
-  --ios-blue-hover: #0051d5;
-  --ios-blue-active: #004fc4;
-  --ios-green: #34c759;
-  --ios-red: #ff3b30;
-  --ios-yellow: #ffcc00;
-  --ios-secondary-bg: #2c2c2e;
-  --ios-tertiary-bg: #3a3a3c;
+  --ios-bg: #f4f5fb;
+  --ios-card-bg: #ffffff;
+  --ios-border: #e6e8f0;
+  --ios-text: #111827;
+  --ios-text-secondary: #6b7280;
+  --ios-text-tertiary: #9ca3af;
+  --ios-blue: #706fd3;
+  --ios-blue-hover: #5956b8;
+  --ios-blue-active: #4f4caf;
+  --ios-green: #16a34a;
+  --ios-red: #ef4444;
+  --ios-yellow: #f59e0b;
+  --ios-secondary-bg: #f4f6fb;
+  --ios-tertiary-bg: #edf0f7;
 
   --coin-gold: #ffd34d;
   --coin-gold-dark: #d7a600;
@@ -21,24 +21,24 @@
 
 /* THEME 1: iOS default */
 html[data-theme="ios"] {
-  --ios-bg: #000000;
-  --ios-card-bg: #1c1c1e;
-  --ios-border: #38383a;
+  --ios-bg: #f4f5fb;
+  --ios-card-bg: #ffffff;
+  --ios-border: #e6e8f0;
 
-  --ios-text: #ffffff;
-  --ios-text-secondary: #8e8e93;
-  --ios-text-tertiary: #636366;
+  --ios-text: #111827;
+  --ios-text-secondary: #6b7280;
+  --ios-text-tertiary: #9ca3af;
 
-  --ios-blue: #007aff;
-  --ios-blue-hover: #0051d5;
-  --ios-blue-active: #004fc4;
+  --ios-blue: #706fd3;
+  --ios-blue-hover: #5956b8;
+  --ios-blue-active: #4f4caf;
 
-  --ios-green: #34c759;
-  --ios-red: #ff3b30;
-  --ios-yellow: #ffcc00;
+  --ios-green: #16a34a;
+  --ios-red: #ef4444;
+  --ios-yellow: #f59e0b;
 
-  --ios-secondary-bg: #2c2c2e;
-  --ios-tertiary-bg: #3a3a3c;
+  --ios-secondary-bg: #f4f6fb;
+  --ios-tertiary-bg: #edf0f7;
 }
 
 /* THEME 2: Dino */

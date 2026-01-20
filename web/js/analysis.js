@@ -4,6 +4,7 @@ const chartEl = document.getElementById("analysis-chart");
 const legendEl = document.getElementById("analysis-legend");
 const statusEl = document.getElementById("analysis-status");
 const incomeEl = document.getElementById("analysis-income");
+const incomeChangeEl = document.getElementById("analysis-income-change");
 const expenseEl = document.getElementById("analysis-expenses");
 const expenseChangeEl = document.getElementById("analysis-expense-change");
 const trendEl = document.getElementById("analysis-trend");
@@ -51,6 +52,8 @@ function renderSummary(data) {
   const currency = data.currency || "UAH";
   const total = parseFloat(data.total || "0") || 0;
 
+  if (incomeEl) incomeEl.textContent = `0 ₴`;
+  if (incomeChangeEl) incomeChangeEl.textContent = "+0% from last month";
   if (expenseEl) expenseEl.textContent = `${formatMoney(total)} ₴`;
   if (expenseChangeEl) expenseChangeEl.textContent = "+0% from last month";
 
@@ -63,12 +66,12 @@ function renderSummary(data) {
   }
 
   const colors = [
-    "#ff6b6b",
-    "#4ecdc4",
-    "#feca57",
-    "#a29bfe",
-    "#54a0ff",
-    "#1dd1a1",
+    "#706fd3",
+    "#9c9bc6",
+    "#c8c7e0",
+    "#5956b8",
+    "#e4e4f0",
+    "#6b7fd7",
   ];
 
   const sorted = [...series].sort((a, b) => parseFloat(b.total) - parseFloat(a.total));
@@ -96,8 +99,8 @@ function renderSummary(data) {
   }
 
   if (trendEl) {
-    const values = buildFlatTrend(total);
-    trendEl.innerHTML = buildTrendSvg(values, currency);
+    const trend = buildFlatTrend(total);
+    trendEl.innerHTML = buildTrendSvg(trend.expenses, trend.income, currency);
   }
 
   if (topEl) {
@@ -191,39 +194,67 @@ function buildTopCategories(slices, total, currency) {
 }
 
 function buildFlatTrend(total) {
-  return [total * 0.9, total * 0.95, total, total * 0.97, total * 1.02, total * 0.98];
+  const expenses = [
+    total * 0.9,
+    total * 0.95,
+    total,
+    total * 0.97,
+    total * 1.02,
+    total * 0.98,
+  ];
+  const income = expenses.map((value) => value * 1.45);
+  return { expenses, income };
 }
 
-function buildTrendSvg(values, currency) {
+function buildTrendSvg(expenses, income, currency) {
   const width = 320;
   const height = 200;
   const padding = 24;
-  const maxValue = Math.max(...values, 1);
-  const minValue = Math.min(...values, 0);
+  const maxValue = Math.max(...expenses, ...income, 1);
+  const minValue = Math.min(...expenses, ...income, 0);
   const range = maxValue - minValue || 1;
 
-  const points = values.map((val, idx) => {
-    const x = padding + (idx / (values.length - 1)) * (width - padding * 2);
+  const expensePoints = expenses.map((val, idx) => {
+    const x = padding + (idx / (expenses.length - 1)) * (width - padding * 2);
     const y = height - padding - ((val - minValue) / range) * (height - padding * 2);
     return { x, y };
   });
 
-  const path = points
+  const incomePoints = income.map((val, idx) => {
+    const x = padding + (idx / (income.length - 1)) * (width - padding * 2);
+    const y = height - padding - ((val - minValue) / range) * (height - padding * 2);
+    return { x, y };
+  });
+
+  const expensePath = expensePoints
     .map((p, idx) => `${idx === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
     .join(" ");
 
-  const dots = points
+  const incomePath = incomePoints
+    .map((p, idx) => `${idx === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
+    .join(" ");
+
+  const expenseDots = expensePoints
     .map(
       (p) =>
-        `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4" fill="#ff6b6b"></circle>`
+        `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4" fill="#ef4444"></circle>`
+    )
+    .join("");
+
+  const incomeDots = incomePoints
+    .map(
+      (p) =>
+        `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="4" fill="#16a34a"></circle>`
     )
     .join("");
 
   return `
     <svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}">
       <path d="M ${padding} ${height - padding} H ${width - padding}" stroke="#d9dce6" stroke-width="1"></path>
-      <path d="${path}" fill="none" stroke="#ff6b6b" stroke-width="2"></path>
-      ${dots}
+      <path d="${incomePath}" fill="none" stroke="#16a34a" stroke-width="2"></path>
+      <path d="${expensePath}" fill="none" stroke="#ef4444" stroke-width="2"></path>
+      ${incomeDots}
+      ${expenseDots}
       <text x="${padding}" y="${padding - 6}" fill="#9ca3af" font-size="11">${currency}</text>
     </svg>
   `;

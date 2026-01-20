@@ -9,86 +9,60 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
-  <title>Finance Tracker</title>
+  <title>Transactions</title>
 
-  <!-- Telegram WebApp SDK -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
-  <!-- Fonts -->
   <link
     rel="stylesheet"
     href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap"
   />
 
-  <!-- Styles -->
   <link rel="stylesheet" href="/css/themes.css" />
   <link rel="stylesheet" href="/css/styles.css" />
 </head>
 
-<body class="app-home has-bottom-nav">
+<body class="transactions-page has-bottom-nav">
   <div class="container">
-    <div class="screen-header">
-      <div class="screen-user">
-        <div class="screen-avatar">👤</div>
-        <div>
-          <div class="screen-title">Finance Tracker</div>
-          <div class="screen-subtitle">Hello, Andrii</div>
-        </div>
+    <div class="transactions-header">
+      <div class="transactions-title">Transactions</div>
+      <div class="transactions-search">
+        <span class="search-icon">🔍</span>
+        <input type="text" placeholder="Search transactions..." />
       </div>
-      <button class="screen-action" id="settings-btn" type="button">💬</button>
-    </div>
-
-    <div class="balance-card">
-      <div class="balance-label">Total Balance</div>
-      <div class="balance-value">0 ₴</div>
-      <div class="balance-stats">
-        <div>
-          <div class="balance-stat-label">Income</div>
-          <div class="balance-stat-value">+0 ₴</div>
-        </div>
-        <div>
-          <div class="balance-stat-label">Expenses</div>
-          <div class="balance-stat-value">-0 ₴</div>
-        </div>
+      <div class="chip-row">
+        <button class="chip active">All</button>
+        <button class="chip">Food</button>
+        <button class="chip">Transport</button>
+        <button class="chip">Shopping</button>
+        <button class="chip">Bills</button>
+        <button class="chip">Other</button>
       </div>
     </div>
 
-    <div class="card-section">
-      <div class="card-title">Spending by Categories</div>
-      <div class="card-placeholder">Coming soon.</div>
+    <div id="history-container" class="transactions-card">
+      <div class="history-empty">
+        <div class="history-empty-title">Loading...</div>
+      </div>
     </div>
 
-    <div class="card-section">
-      <div class="card-title">Recent Transactions</div>
-      <div class="card-placeholder">Open History tab to see scans.</div>
+    <div id="details-container" class="hidden">
+      <div class="details-card">
+        <h2 class="details-title">Details</h2>
+        <div id="details-content"></div>
+      </div>
     </div>
-
-    <div id="not-telegram" class="warning-card hidden">
-      <div class="warning-title">Open this Mini App inside Telegram.</div>
-      <p class="warning-text">The QR scanner relies on Telegram WebApp APIs.</p>
-    </div>
-
-    <p id="scan-status" class="status-text">Ready to scan.</p>
   </div>
 
-  <button id="scan-button" class="fab-scan" type="button" aria-label="Scan QR">
-    <svg class="icon" viewBox="0 0 24 24">
-      <path
-        d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"
-      ></path>
-      <circle cx="12" cy="13" r="4"></circle>
-    </svg>
-  </button>
-
   <nav class="bottom-nav safe-bottom">
-    <a class="bottom-nav-item active" href="/">
+    <a class="bottom-nav-item" href="/">
       <svg class="icon" viewBox="0 0 24 24">
         <path d="M3 9l9-7 9 7"></path>
         <path d="M9 22V12h6v10"></path>
       </svg>
       <span>Home</span>
     </a>
-    <a class="bottom-nav-item" href="/history.html">
+    <a class="bottom-nav-item active" href="/history.html">
       <svg class="icon" viewBox="0 0 24 24">
         <path d="M3 3h18v18H3z"></path>
         <path d="M7 8h10"></path>

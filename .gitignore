@@ -19,3 +19,11 @@ tax_xml_files.py
 test2.py
 .gitignore
 .gitignore
+scripts/warmup_categories.py
+scripts/example_categorize_items.py
+.gitignore
+logs/qr_scanner.log
+exports/items.csv
+export_items_csv.py
+figma_design/dist/
+figma_design/node_modules/*
