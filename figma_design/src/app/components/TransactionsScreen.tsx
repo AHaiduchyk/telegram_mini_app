@@ -68,12 +68,14 @@ export function TransactionsScreen() {
     if (!type) return 'Other';
     if (type === 'qr_scan') return 'QR scan';
     if (type === 'manual') return 'Manual';
+    if (type === 'income') return 'Income';
     return type;
   };
 
   const typeIcon = (type?: string) => {
     if (type === 'manual') return '✍️';
     if (type === 'bank') return '🏦';
+    if (type === 'income') return '💰';
     return '🧾';
   };
 
@@ -149,13 +151,14 @@ export function TransactionsScreen() {
       const dateKey = getDateKey(effectiveDate);
       const label = formatDateLabel(effectiveDate);
       const amountValue = exp.amount ? Number(exp.amount) : 0;
+      const isIncome = Boolean(exp.is_income) || exp.type === 'income';
       const transactions = groups.get(dateKey)?.transactions ?? [];
 
       transactions.push({
         id: exp.id,
         name: exp.merchant || exp.check_id || 'Receipt',
         category: typeLabel(exp.type),
-        amount: -Math.abs(amountValue),
+        amount: isIncome ? Math.abs(amountValue) : -Math.abs(amountValue),
         time: created.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' }),
         icon: typeIcon(exp.type),
       });
@@ -175,15 +178,15 @@ export function TransactionsScreen() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-background pb-20">
+    <div className="flex flex-col h-full bg-transparent pb-20">
       {/* Header */}
-      <div className="bg-card px-4 py-4 border-b border-border">
-        <h1 className="text-lg font-semibold text-foreground mb-4">Transactions</h1>
+      <div className="bg-white/60 backdrop-blur-xl px-4 py-4 border-b border-white/40 shadow-sm">
+        <h1 className="text-lg font-semibold text-gray-900 mb-4">Transactions</h1>
 
         {/* Search Bar */}
         <div className="relative mb-3">
           <Search
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
             size={20}
           />
           <input
@@ -191,7 +194,7 @@ export function TransactionsScreen() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search transactions..."
-            className="w-full pl-10 pr-4 py-2.5 bg-[color:var(--brand-cream-strong)] border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-[color:var(--brand-purple)]"
+            className="w-full pl-10 pr-4 py-2.5 bg-white/60 backdrop-blur-xl border border-white/40 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#706fd3] shadow-[0_10px_40px_rgba(112,111,211,0.15)]"
           />
         </div>
 
@@ -201,10 +204,10 @@ export function TransactionsScreen() {
             <button
               key={category}
               onClick={() => setSelectedCategory(category)}
-              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
+              className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all backdrop-blur-xl border shadow-[0_4px_20px_rgba(112,111,211,0.15)] ${
                 selectedCategory === category
-                  ? 'bg-[color:var(--brand-purple)] text-white'
-                  : 'bg-[color:var(--brand-lavender)] text-foreground hover:bg-[color:var(--brand-lavender-dark)]'
+                  ? 'bg-gradient-to-br from-[#706fd3] to-[#5956b8] text-white border-white/20'
+                  : 'bg-white/60 text-gray-700 border-white/40 hover:bg-white/80'
               }`}
             >
               {category}
@@ -216,47 +219,47 @@ export function TransactionsScreen() {
       {/* Transactions List */}
       <div className="flex-1 overflow-y-auto px-4 pt-4 pb-4">
         {loading && (
-          <div className="text-center text-muted-foreground">Loading...</div>
+          <div className="text-center text-gray-500">Loading...</div>
         )}
         {!loading && error && (
-          <div className="text-center text-muted-foreground">{error}</div>
+          <div className="text-center text-gray-500">{error}</div>
         )}
         {!loading && !error && transactionsByDate.length === 0 && (
-          <div className="text-center text-muted-foreground">
-            No expenses yet.
+          <div className="text-center text-gray-500">
+            No transactions yet.
           </div>
         )}
         {!loading && !error && transactionsByDate.map((group, groupIndex) => (
           <div key={groupIndex} className="mb-6">
             <div className="flex items-center gap-2 mb-3">
-              <h3 className="font-semibold text-foreground">{group.date}</h3>
-              <div className="flex-1 h-px bg-border"></div>
+              <h3 className="font-semibold text-gray-700">{group.date}</h3>
+              <div className="flex-1 h-px bg-white/60"></div>
             </div>
 
-            <div className="bg-card rounded-2xl shadow-sm overflow-hidden">
+            <div className="bg-white/60 backdrop-blur-xl rounded-3xl shadow-[0_10px_40px_rgba(112,111,211,0.15)] overflow-hidden border border-white/40">
               {group.transactions.map((transaction, index) => (
                 <div
                   key={transaction.id}
                   className={`flex items-center justify-between p-4 ${
                     index !== group.transactions.length - 1
-                      ? 'border-b border-[color:var(--brand-lavender)]'
+                      ? 'border-b border-white/30'
                       : ''
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-[color:var(--brand-lavender)] rounded-xl flex items-center justify-center text-xl">
+                    <div className="w-12 h-12 bg-gradient-to-br from-gray-100 to-gray-50 rounded-xl flex items-center justify-center text-xl shadow-sm">
                       {transaction.icon}
                     </div>
                     <div>
-                      <p className="font-medium text-foreground">
+                      <p className="font-medium text-gray-900">
                         {transaction.name}
                       </p>
                       <div className="flex items-center gap-2 mt-1">
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-xs text-gray-600">
                           {transaction.category}
                         </span>
-                        <span className="text-xs text-muted-foreground/70">•</span>
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-xs text-gray-400">•</span>
+                        <span className="text-xs text-gray-600">
                           {transaction.time}
                         </span>
                       </div>
@@ -265,8 +268,8 @@ export function TransactionsScreen() {
                   <p
                     className={`font-semibold text-lg ${
                       transaction.amount > 0
-                        ? 'text-[color:var(--brand-green-dark)]'
-                        : 'text-foreground'
+                        ? 'text-green-600'
+                        : 'text-gray-900'
                     }`}
                   >
                     {transaction.amount > 0 ? '+' : ''}
@@ -282,7 +285,7 @@ export function TransactionsScreen() {
             <button
               onClick={handleLoadMore}
               disabled={loadingMore}
-              className="px-4 py-2 rounded-full text-sm font-medium bg-[color:var(--brand-lavender)] text-foreground hover:bg-[color:var(--brand-lavender-dark)] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+              className="px-4 py-2 rounded-full text-sm font-medium bg-white/60 text-gray-700 hover:bg-white/80 transition-all disabled:opacity-60 disabled:cursor-not-allowed border border-white/40 shadow-[0_4px_20px_rgba(112,111,211,0.15)]"
             >
               {loadingMore ? 'Loading…' : 'Load more'}
             </button>

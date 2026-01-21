@@ -53,13 +53,21 @@ class ItemCategoryMap(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)
 
 
-class Expense(SQLModel, table=True):
+class Transaction(SQLModel, table=True):
+    __tablename__ = "transactions"
+
     id: Optional[int] = Field(default=None, primary_key=True)
     tg_user_id: int = Field(index=True)
-    check_id: str = Field(max_length=255, index=True)
+    check_id: Optional[str] = Field(default=None, max_length=255, index=True)
     amount: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(12, 2)))
     url: Optional[str] = Field(default=None, max_length=4096)
-    merchant: Optional[str] = Field(default=None, max_length=255)
     receipt_date: Optional[str] = Field(default=None, max_length=32)
+    check_xml: Optional[str] = Field(default=None)
+    merchant: Optional[str] = Field(default=None, max_length=255)
     type: str = Field(default="qr_scan", max_length=32)
+    is_income: bool = Field(default=False, index=True)
+    category: Optional[str] = Field(default=None, max_length=64)
+    note: Optional[str] = Field(default=None, max_length=512)
+    payment_method: Optional[str] = Field(default=None, max_length=16)
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+    updated_at: datetime = Field(default_factory=datetime.utcnow, index=True)

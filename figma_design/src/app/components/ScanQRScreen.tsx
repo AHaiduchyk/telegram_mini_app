@@ -294,7 +294,7 @@ export function ScanQRScreen({ onBack }: ScanQRScreenProps) {
 
             {/* Scanning Line */}
             <div className="absolute inset-x-0 top-1/2 -translate-y-1/2">
-              <div className="h-1 bg-[color:var(--brand-gold)] animate-pulse shadow-lg shadow-[0_0_16px_rgba(246,195,67,0.5)]"></div>
+              <div className="h-1 bg-[#706fd3] animate-pulse shadow-lg shadow-[0_0_16px_rgba(112,111,211,0.5)]"></div>
             </div>
 
             {/* QR Code Icon */}
@@ -322,31 +322,31 @@ export function ScanQRScreen({ onBack }: ScanQRScreenProps) {
         {/* Scan Result Modal */}
         {hasSuccess && (
           <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 z-20">
-            <div className="bg-card rounded-2xl p-6 shadow-2xl animate-in fade-in slide-in-from-bottom-4">
+            <div className="bg-white/95 backdrop-blur-xl rounded-3xl p-6 shadow-[0_20px_60px_rgba(112,111,211,0.35)] border border-white/60 animate-in fade-in slide-in-from-bottom-4">
               <div className="text-center mb-4">
-                <div className="w-16 h-16 bg-[color:var(--brand-green)]/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
                   <span className="text-3xl">✓</span>
                 </div>
-                <h3 className="text-lg font-semibold text-foreground mb-1">
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">
                   Scan stored
                 </h3>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-gray-600">
                   Receipt data saved to history
                 </p>
               </div>
 
               <div className="space-y-3 mb-6">
-                <div className="flex justify-between items-center py-2 border-b border-[color:var(--brand-lavender)]">
-                  <span className="text-sm text-muted-foreground">Check ID</span>
-                  <span className="font-medium text-foreground">{checkIdText}</span>
+                <div className="flex justify-between items-center py-2 border-b border-gray-200/70">
+                  <span className="text-sm text-gray-600">Check ID</span>
+                  <span className="font-medium text-gray-900">{checkIdText}</span>
                 </div>
-                <div className="flex justify-between items-center py-2 border-b border-[color:var(--brand-lavender)]">
-                  <span className="text-sm text-muted-foreground">Amount</span>
-                  <span className="font-medium text-foreground">{amountText}</span>
+                <div className="flex justify-between items-center py-2 border-b border-gray-200/70">
+                  <span className="text-sm text-gray-600">Amount</span>
+                  <span className="font-medium text-gray-900">{amountText}</span>
                 </div>
                 <div className="flex justify-between items-center py-2">
-                  <span className="text-sm text-muted-foreground">Source</span>
-                  <span className="font-medium text-foreground truncate max-w-[140px]">
+                  <span className="text-sm text-gray-600">Source</span>
+                  <span className="font-medium text-gray-900 truncate max-w-[140px]">
                     {urlText}
                   </span>
                 </div>
@@ -355,13 +355,13 @@ export function ScanQRScreen({ onBack }: ScanQRScreenProps) {
               <button
                 onClick={handleConfirm}
                 disabled={savingExpense}
-                className="w-full py-3 bg-[color:var(--brand-purple)] text-white rounded-xl font-medium hover:bg-[color:var(--brand-purple-dark)] transition-all mb-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                className="w-full py-3 bg-[#706fd3] text-white rounded-xl font-medium hover:bg-[#5956b8] transition-all mb-2 disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {savingExpense ? 'Saving...' : 'Add Expense'}
+                {savingExpense ? 'Saving...' : 'Add Transaction'}
               </button>
               <button
                 onClick={handleScanAgain}
-                className="w-full py-3 bg-[color:var(--brand-lavender)] text-[color:var(--brand-purple-dark)] rounded-xl font-medium hover:bg-[color:var(--brand-lavender-dark)] transition-all"
+                className="w-full py-3 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-all"
               >
                 Scan Again
               </button>
@@ -371,23 +371,23 @@ export function ScanQRScreen({ onBack }: ScanQRScreenProps) {
 
         {showDuplicatePrompt && (
           <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/40 px-6">
-            <div className="bg-card rounded-2xl p-5 shadow-xl w-full max-w-xs">
-              <h3 className="text-lg font-semibold text-foreground mb-2">
-                Expense already exists
+            <div className="bg-white/95 rounded-2xl p-5 shadow-xl w-full max-w-xs border border-white/60">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                Transaction already exists
               </h3>
-              <p className="text-sm text-muted-foreground mb-4">
+              <p className="text-sm text-gray-600 mb-4">
                 Цей чек уже збережений ({duplicateCount} запис). Додати ще раз?
               </p>
               <div className="flex gap-3">
                 <button
                   onClick={handleConfirmDuplicate}
-                  className="flex-1 py-2.5 bg-[color:var(--brand-purple)] text-white rounded-xl font-medium hover:bg-[color:var(--brand-purple-dark)] transition-all"
+                  className="flex-1 py-2.5 bg-[#706fd3] text-white rounded-xl font-medium hover:bg-[#5956b8] transition-all"
                 >
                   Так
                 </button>
                 <button
                   onClick={() => setShowDuplicatePrompt(false)}
-                  className="flex-1 py-2.5 bg-[color:var(--brand-lavender)] text-[color:var(--brand-purple-dark)] rounded-xl font-medium hover:bg-[color:var(--brand-lavender-dark)] transition-all"
+                  className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-all"
                 >
                   Ні
                 </button>
@@ -404,7 +404,7 @@ export function ScanQRScreen({ onBack }: ScanQRScreenProps) {
             <button
               onClick={handleScan}
               disabled={!scanEnabled || isBusy}
-              className="flex-1 py-3 bg-[color:var(--brand-green)] text-white rounded-xl font-medium flex items-center justify-center gap-2 hover:bg-[color:var(--brand-green-dark)] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+              className="flex-1 py-3 bg-green-500 text-white rounded-xl font-medium flex items-center justify-center gap-2 hover:bg-green-600 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <Camera size={20} />
               Try Again

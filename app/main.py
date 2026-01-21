@@ -24,7 +24,7 @@ from sqlmodel import Session, select
 from app.auth import InitDataValidationError, extract_user_id, validate_init_data, validate_init_data_unsafe
 from app.categorizer import build_category_maps, get_or_predict_category_cached, OTHER_PATH
 from app.db import engine, get_session, init_db
-from app.models import Expense, Scan, TaxCheck
+from app.models import Scan, TaxCheck, Transaction
 from app.qr_parse import parse_qr_text
 from app.tax_xml_parser import parse_tax_xml
 
@@ -101,27 +101,37 @@ class SaveCheckRequest(BaseModel):
     check_text: str = Field(..., max_length=2_000_000)
 
 
-class ExpenseCreate(BaseModel):
+class TransactionCreate(BaseModel):
     init_data: Optional[str] = None
     init_data_unsafe: Optional[Dict[str, Any]] = None
-    check_id: str = Field(..., max_length=255)
-    amount: Optional[str] = Field(default=None, max_length=64)
+    check_id: Optional[str] = Field(default=None, max_length=255)
+    amount: str = Field(..., max_length=64)
     url: Optional[str] = Field(default=None, max_length=4096)
-    merchant: Optional[str] = Field(default=None, max_length=255)
     receipt_date: Optional[str] = Field(default=None, max_length=32)
+    check_xml: Optional[str] = Field(default=None)
+    merchant: Optional[str] = Field(default=None, max_length=255)
     type: str = Field(default="qr_scan", max_length=32)
+    category: Optional[str] = Field(default=None, max_length=64)
+    note: Optional[str] = Field(default=None, max_length=512)
+    payment_method: Optional[str] = Field(default=None, max_length=16)
     confirm_duplicate: bool = False
 
 
-class ExpenseResponse(BaseModel):
+class TransactionResponse(BaseModel):
     id: int
-    check_id: str
+    check_id: Optional[str]
     amount: Optional[str]
     url: Optional[str]
-    merchant: Optional[str]
     receipt_date: Optional[str]
+    check_xml: Optional[str]
+    merchant: Optional[str]
     type: str
+    is_income: bool
+    category: Optional[str]
+    note: Optional[str]
+    payment_method: Optional[str]
     created_at: str
+    updated_at: str
 
 
 
@@ -1044,96 +1054,119 @@ def save_check(
     }
 
 
-@app.post("/api/expense", response_model=ExpenseResponse)
+@app.post("/api/expense", response_model=TransactionResponse)
 def create_expense(
-    payload: ExpenseCreate,
+    payload: TransactionCreate,
     session: Session = Depends(get_session),
-) -> ExpenseResponse:
+) -> TransactionResponse:
     user_id = get_verified_user_id(payload.init_data, payload.init_data_unsafe)
 
-    check_id = payload.check_id.strip()
-    if not check_id:
+    check_id = payload.check_id.strip() if payload.check_id else None
+    if payload.type == "qr_scan" and not check_id:
         raise HTTPException(status_code=400, detail="Missing check_id")
 
-    existing = session.exec(
-        select(Expense).where(
-            Expense.tg_user_id == user_id,
-            Expense.check_id == check_id,
-        )
-    ).all()
-    existing_count = len(existing)
-    if existing_count and not payload.confirm_duplicate:
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "message": "Expense already exists",
-                "existing_count": existing_count,
-            },
-        )
+    if check_id:
+        existing = session.exec(
+            select(Transaction).where(
+                Transaction.tg_user_id == user_id,
+                Transaction.check_id == check_id,
+            )
+        ).all()
+        existing_count = len(existing)
+        if existing_count and not payload.confirm_duplicate:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "message": "Transaction already exists",
+                    "existing_count": existing_count,
+                },
+            )
 
     amount_value = _parse_amount(payload.amount)
-    expense = Expense(
+    if amount_value is None or amount_value <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than 0")
+
+    is_income = payload.type == "income"
+    transaction = Transaction(
         tg_user_id=user_id,
         check_id=check_id,
         amount=amount_value,
         url=payload.url,
-        merchant=payload.merchant,
         receipt_date=payload.receipt_date,
+        check_xml=payload.check_xml,
+        merchant=payload.merchant,
         type=payload.type or "qr_scan",
+        is_income=is_income,
+        category=payload.category,
+        note=payload.note,
+        payment_method=payload.payment_method,
+        updated_at=datetime.utcnow(),
     )
-    session.add(expense)
+    session.add(transaction)
     session.commit()
-    session.refresh(expense)
+    session.refresh(transaction)
 
-    amount_out = f"{expense.amount:.2f}" if expense.amount is not None else None
-    return ExpenseResponse(
-        id=expense.id,
-        check_id=expense.check_id,
+    amount_out = f"{transaction.amount:.2f}" if transaction.amount is not None else None
+    return TransactionResponse(
+        id=transaction.id,
+        check_id=transaction.check_id,
         amount=amount_out,
-        url=expense.url,
-        merchant=expense.merchant,
-        receipt_date=expense.receipt_date,
-        type=expense.type,
-        created_at=expense.created_at.isoformat(),
+        url=transaction.url,
+        receipt_date=transaction.receipt_date,
+        check_xml=transaction.check_xml,
+        merchant=transaction.merchant,
+        type=transaction.type,
+        is_income=transaction.is_income,
+        category=transaction.category,
+        note=transaction.note,
+        payment_method=transaction.payment_method,
+        created_at=transaction.created_at.isoformat(),
+        updated_at=transaction.updated_at.isoformat(),
     )
 
 
-@app.get("/api/expenses", response_model=List[ExpenseResponse])
+@app.get("/api/expenses", response_model=List[TransactionResponse])
 def list_expenses(
     init_data: Optional[str] = Query(None, alias="init_data"),
     init_data_unsafe: Optional[str] = Query(None, alias="init_data_unsafe"),
     limit: Optional[int] = Query(None, ge=1, le=200),
     offset: int = Query(0, ge=0),
     session: Session = Depends(get_session),
-) -> List[ExpenseResponse]:
+) -> List[TransactionResponse]:
     parsed_unsafe: Optional[Dict[str, Any]] = None
     if init_data_unsafe:
         try:
             parsed_unsafe = json.loads(init_data_unsafe)
         except json.JSONDecodeError as exc:
-            logger.warning("Expenses init_data_unsafe JSON decode failed: %s", exc)
+            logger.warning("Transactions init_data_unsafe JSON decode failed: %s", exc)
             raise HTTPException(status_code=400, detail="Invalid init_data_unsafe") from exc
 
     user_id = get_verified_user_id(init_data, parsed_unsafe)
 
-    statement = select(Expense).where(Expense.tg_user_id == user_id).order_by(Expense.created_at.desc())
+    statement = select(Transaction).where(Transaction.tg_user_id == user_id).order_by(Transaction.created_at.desc())
     if limit:
         statement = statement.offset(offset).limit(limit)
     rows = session.exec(statement).all()
 
-    out: List[ExpenseResponse] = []
+    out: List[TransactionResponse] = []
     for row in rows:
         amount_out = f"{row.amount:.2f}" if row.amount is not None else None
         out.append(
-            ExpenseResponse(
+            TransactionResponse(
                 id=row.id,
                 check_id=row.check_id,
                 amount=amount_out,
                 url=row.url,
                 merchant=row.merchant,
                 receipt_date=row.receipt_date,
+                check_xml=row.check_xml,
                 type=row.type,
+                is_income=row.is_income,
+                category=row.category,
+                note=row.note,
+                payment_method=row.payment_method,
                 created_at=row.created_at.isoformat(),
+                updated_at=row.updated_at.isoformat(),
             )
         )
     return out

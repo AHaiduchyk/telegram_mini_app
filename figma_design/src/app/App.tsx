@@ -10,6 +10,7 @@ import { SettingsScreen } from '@/app/components/SettingsScreen';
 export default function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [showAddExpense, setShowAddExpense] = useState(false);
+  const [showAddIncome, setShowAddIncome] = useState(false);
   const [showScanQR, setShowScanQR] = useState(false);
 
   const renderScreen = () => {
@@ -17,20 +18,40 @@ export default function App() {
       return <ScanQRScreen onBack={() => setShowScanQR(false)} />;
     }
 
+    if (showAddIncome) {
+      return (
+        <AddExpenseScreen
+          onBack={() => setShowAddIncome(false)}
+          onScanQR={() => {
+            setShowAddIncome(false);
+            setShowScanQR(true);
+          }}
+          isIncome={true}
+        />
+      );
+    }
+
     if (showAddExpense) {
       return (
         <AddExpenseScreen
           onBack={() => setShowAddExpense(false)}
           onScanQR={() => {
+            setShowAddExpense(false);
             setShowScanQR(true);
           }}
+          isIncome={false}
         />
       );
     }
 
     switch (activeTab) {
       case 'home':
-        return <HomeScreen onAddExpense={() => setShowAddExpense(true)} />;
+        return (
+          <HomeScreen
+            onAddExpense={() => setShowAddExpense(true)}
+            onAddIncome={() => setShowAddIncome(true)}
+          />
+        );
       case 'transactions':
         return <TransactionsScreen />;
       case 'analytics':
@@ -38,14 +59,19 @@ export default function App() {
       case 'settings':
         return <SettingsScreen />;
       default:
-        return <HomeScreen onAddExpense={() => setShowAddExpense(true)} />;
+        return (
+          <HomeScreen
+            onAddExpense={() => setShowAddExpense(true)}
+            onAddIncome={() => setShowAddIncome(true)}
+          />
+        );
     }
   };
 
   return (
-    <div className="h-screen w-full max-w-md mx-auto bg-white flex flex-col overflow-hidden">
+    <div className="h-screen w-full max-w-md mx-auto bg-gradient-to-br from-purple-50 via-indigo-50 to-pink-50 flex flex-col overflow-hidden">
       {renderScreen()}
-      {!showAddExpense && !showScanQR && (
+      {!showAddExpense && !showScanQR && !showAddIncome && (
         <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
       )}
     </div>
