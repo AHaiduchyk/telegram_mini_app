@@ -1,0 +1,238 @@
+import { createContext, useContext, useMemo, useState } from 'react';
+
+type Locale = 'en' | 'uk';
+
+type LocaleContextValue = {
+  locale: Locale;
+  setLocale: (locale: Locale) => void;
+  t: (key: string) => string;
+  formatLocale: string;
+};
+
+const translations: Record<Locale, Record<string, string>> = {
+  en: {
+    analytics: 'Analytics',
+    budget: 'Budget',
+    home: 'Home',
+    settings: 'Settings',
+    transactions: 'Transactions',
+    all: 'All',
+    expense: 'Expense',
+    recent_transactions: 'Recent Transactions',
+    finance_tracker: 'Finance Tracker',
+    hello: 'Hello',
+    view_all: 'View all',
+    total_balance: 'Total Balance',
+    income: 'Income',
+    expenses: 'Expenses',
+    add_income: 'Add Income',
+    add_expense: 'Add Expense',
+    budget_progress: 'Budget Progress',
+    coming_soon: 'Coming Soon.',
+    no_transactions: 'No transactions yet.',
+    load_more: 'Load more',
+    search_transactions: 'Search transactions...',
+    today: 'Today',
+    yesterday: 'Yesterday',
+    month_budget: 'Monthly budget',
+    spent: 'Spent',
+    left: 'left',
+    on_track: 'On track',
+    over_budget: 'Over budget',
+    budget_plans: 'Budget Plans',
+    monthly_trend: 'Monthly Trend',
+    set_limits: 'Set monthly limits for each category.',
+    save_budgets: 'Save budgets',
+    saving: 'Saving…',
+    loading: 'Loading…',
+    amount: 'Amount',
+    category: 'Category',
+    date: 'Date',
+    select_date: 'Select date',
+    note: 'Note',
+    payment_method: 'Payment Method',
+    scan_qr: 'Scan QR',
+    save_transaction: 'Save Transaction',
+    add_transaction: 'Add Transaction',
+    settings_title: 'Settings',
+    account: 'Account',
+    preferences: 'Preferences',
+    support: 'Support',
+    profile: 'Profile',
+    notifications: 'Notifications',
+    privacy_security: 'Privacy & Security',
+    theme: 'Theme',
+    language: 'Language',
+    help_support: 'Help & Support',
+    log_out: 'Log Out',
+    light: 'Light',
+    dark: 'Dark',
+    no_budget_data: 'No budget data yet.',
+    open_in_telegram: 'Open this Mini App inside Telegram.',
+    enter_note: 'Enter a note...',
+    amount_error: 'Amount must be greater than 0.',
+    save_failed: 'Failed to save.',
+    category_label: 'Category',
+    time_label: 'Time',
+    type_label: 'Type',
+    transaction_id: 'Transaction ID',
+    edit: 'Edit',
+    delete: 'Delete',
+    save: 'Save',
+    cancel: 'Cancel',
+    over_limit: 'Over limit',
+    cash: 'Cash',
+    card: 'Card',
+    telegram_user: 'Telegram user',
+    close_app_prompt: 'Close the app?',
+    subscription_title: 'Automatic transaction',
+    subscription_prompt: 'Add this expense automatically on a schedule?',
+    subscription_monthly: 'Monthly',
+    subscription_weekly: 'Weekly',
+    subscription_yearly: 'Yearly',
+    yes_auto: 'Yes, auto',
+    no_once: 'No, once',
+    automatic_transactions: 'Automatic transactions',
+    automatic_transaction: 'Automatic transaction',
+    premium_only: 'This feature is available for premium users only.',
+    premium_only_title: 'Premium',
+    manage_automatic: 'Manage automatic transactions',
+    pause: 'Pause',
+    resume: 'Resume',
+    frequency: 'Frequency',
+    start_date: 'Start date',
+    subscription_name: 'Name',
+    premium: 'Premium',
+    premium_status: 'Premium status',
+    premium_expires: 'Active until',
+    premium_upgrade: 'Upgrade to Premium',
+  },
+  uk: {
+    analytics: 'Аналітика',
+    budget: 'Бюджет',
+    home: 'Головна',
+    settings: 'Налаштування',
+    transactions: 'Транзакції',
+    all: 'Усі',
+    expense: 'Витрата',
+    recent_transactions: 'Останні транзакції',
+    finance_tracker: 'Фінансовий трекер',
+    hello: 'Привіт',
+    view_all: 'Переглянути все',
+    total_balance: 'Загальний баланс',
+    income: 'Дохід',
+    expenses: 'Витрати',
+    add_income: 'Додати дохід',
+    add_expense: 'Додати витрату',
+    budget_progress: 'Прогрес бюджету',
+    coming_soon: 'Скоро буде.',
+    no_transactions: 'Транзакцій ще немає.',
+    load_more: 'Завантажити ще',
+    search_transactions: 'Пошук транзакцій...',
+    today: 'Сьогодні',
+    yesterday: 'Вчора',
+    month_budget: 'Місячний бюджет',
+    spent: 'Витрачено',
+    left: 'залишилось',
+    on_track: 'У межах бюджету',
+    over_budget: 'Перевищено бюджет',
+    budget_plans: 'Плани бюджету',
+    monthly_trend: 'Тренд по місяцях',
+    set_limits: 'Задайте ліміти по категоріях.',
+    save_budgets: 'Зберегти бюджети',
+    saving: 'Збереження…',
+    loading: 'Завантаження…',
+    amount: 'Сума',
+    category: 'Категорія',
+    date: 'Дата',
+    select_date: 'Обрати дату',
+    note: 'Нотатка',
+    payment_method: 'Спосіб оплати',
+    scan_qr: 'Сканувати QR',
+    save_transaction: 'Зберегти транзакцію',
+    add_transaction: 'Додати транзакцію',
+    settings_title: 'Налаштування',
+    account: 'Акаунт',
+    preferences: 'Параметри',
+    support: 'Підтримка',
+    profile: 'Профіль',
+    notifications: 'Сповіщення',
+    privacy_security: 'Приватність і безпека',
+    theme: 'Тема',
+    language: 'Мова',
+    help_support: 'Допомога та підтримка',
+    log_out: 'Вийти',
+    light: 'Світла',
+    dark: 'Темна',
+    no_budget_data: 'Даних по бюджету ще немає.',
+    open_in_telegram: 'Відкрийте міні-апку в Telegram.',
+    enter_note: 'Введіть нотатку...',
+    amount_error: 'Сума має бути більшою за 0.',
+    save_failed: 'Не вдалося зберегти.',
+    category_label: 'Категорія',
+    time_label: 'Час',
+    type_label: 'Тип',
+    transaction_id: 'ID транзакції',
+    edit: 'Редагувати',
+    delete: 'Видалити',
+    save: 'Зберегти',
+    cancel: 'Скасувати',
+    over_limit: 'Перевищено ліміт',
+    cash: 'Готівка',
+    card: 'Картка',
+    telegram_user: 'Користувач Telegram',
+    close_app_prompt: 'Закрити застосунок?',
+    subscription_title: 'Автоматична транзакція',
+    subscription_prompt: 'Додавати цю витрату автоматично за розкладом?',
+    subscription_monthly: 'Щомісяця',
+    subscription_weekly: 'Щотижня',
+    subscription_yearly: 'Щороку',
+    yes_auto: 'Так, автоматично',
+    no_once: 'Ні, один раз',
+    automatic_transactions: 'Автоматичні транзакції',
+    automatic_transaction: 'Автоматична транзакція',
+    premium_only: 'Доступно лише преміум користувачам.',
+    premium_only_title: 'Преміум',
+    manage_automatic: 'Керування автоматичними транзакціями',
+    pause: 'Пауза',
+    resume: 'Продовжити',
+    frequency: 'Частота',
+    start_date: 'Дата початку',
+    subscription_name: 'Назва',
+    premium: 'Преміум',
+    premium_status: 'Статус преміум',
+    premium_expires: 'Активний до',
+    premium_upgrade: 'Оформити преміум',
+  },
+};
+
+const LocaleContext = createContext<LocaleContextValue | null>(null);
+
+export function LocaleProvider({ children }: { children: React.ReactNode }) {
+  const stored = typeof window !== 'undefined' ? window.localStorage.getItem('locale') : null;
+  const initial: Locale = stored === 'uk' || stored === 'en' ? stored : 'en';
+  const [locale, setLocaleState] = useState<Locale>(initial);
+
+  const setLocale = (next: Locale) => {
+    setLocaleState(next);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('locale', next);
+    }
+  };
+
+  const value = useMemo<LocaleContextValue>(() => {
+    const t = (key: string) => translations[locale][key] ?? key;
+    const formatLocale = locale === 'uk' ? 'uk-UA' : 'en-GB';
+    return { locale, setLocale, t, formatLocale };
+  }, [locale]);
+
+  return <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>;
+}
+
+export function useLocale() {
+  const ctx = useContext(LocaleContext);
+  if (!ctx) {
+    throw new Error('useLocale must be used within LocaleProvider');
+  }
+  return ctx;
+}

@@ -2,6 +2,31 @@
 
 :root {
   --font-size: 16px;
+  --app-bg: linear-gradient(135deg, #f5f4ff 0%, #eef0ff 45%, #f8eef6 100%);
+  --surface-card: rgba(255, 255, 255, 0.6);
+  --surface-card-strong: rgba(255, 255, 255, 0.8);
+  --surface-card-soft: rgba(255, 255, 255, 0.4);
+  --surface-border: rgba(255, 255, 255, 0.4);
+  --surface-border-soft: rgba(255, 255, 255, 0.3);
+  --surface-shadow-sm: 0 4px 20px rgba(112, 111, 211, 0.15);
+  --surface-shadow: 0 10px 40px rgba(112, 111, 211, 0.15);
+  --surface-shadow-strong: 0 14px 48px rgba(112, 111, 211, 0.25);
+  --surface-shadow-top: 0 -10px 40px rgba(112, 111, 211, 0.1);
+  --accent-glow: 0 20px 60px rgba(112, 111, 211, 0.4);
+  --accent-glow-strong: 0 10px 40px rgba(112, 111, 211, 0.5);
+  --accent-glow-soft: 0 0 16px rgba(112, 111, 211, 0.5);
+  --accent-from: #706fd3;
+  --accent-to: #5956b8;
+  --category-1: #706fd3;
+  --category-2: #9c9bc6;
+  --category-3: #c8c7e0;
+  --category-4: #5956b8;
+  --category-5: #e4e4f0;
+  --category-6: #7c78e0;
+  --category-7: #a9a6d8;
+  --text-primary: #111827;
+  --text-secondary: #6b7280;
+  --text-muted: #9ca3af;
   --background: #ffffff;
   --foreground: oklch(0.145 0 0);
   --card: #ffffff;
@@ -41,7 +66,95 @@
   --sidebar-ring: oklch(0.708 0 0);
 }
 
+@layer utilities {
+  @keyframes fab-nudge {
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+    50% {
+      transform: translateX(-6px);
+    }
+  }
+
+  .animate-fab-nudge {
+    animation: fab-nudge 0.4s ease-in-out;
+  }
+
+  .swipe-active .screen-pad {
+    padding-bottom: 0 !important;
+  }
+
+  .screen-header {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    height: 66px;
+  }
+
+  .screen-header-inner {
+    width: 100%;
+    max-width: 28rem;
+    padding: 0.75rem;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    height: 100%;
+    position: relative;
+  }
+
+  .screen-title {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    max-width: calc(100% - 10rem);
+    width: 100%;
+    padding: 0 0.25rem;
+    pointer-events: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .tg-statusbar {
+    height: var(--tg-safe-top, 0px);
+    background: #000;
+    flex: 0 0 auto;
+  }
+
+  .tg-header-mask {
+    height: var(--tg-controls-height, 44px);
+    background: #e5e7eb;
+    flex: 0 0 auto;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  }
+
+  .no-zoom-input {
+    font-size: 16px;
+    line-height: 1.5;
+    touch-action: manipulation;
+  }
+
+}
+
 .dark {
+  --app-bg: linear-gradient(135deg, #11131b 0%, #121523 45%, #161327 100%);
+  --surface-card: rgba(24, 27, 39, 0.72);
+  --surface-card-strong: rgba(24, 27, 39, 0.88);
+  --surface-card-soft: rgba(24, 27, 39, 0.55);
+  --surface-border: rgba(255, 255, 255, 0.08);
+  --surface-border-soft: rgba(255, 255, 255, 0.06);
+  --surface-shadow-sm: 0 4px 20px rgba(8, 10, 18, 0.45);
+  --surface-shadow: 0 10px 40px rgba(8, 10, 18, 0.5);
+  --surface-shadow-strong: 0 14px 48px rgba(6, 8, 16, 0.6);
+  --surface-shadow-top: 0 -10px 40px rgba(8, 10, 18, 0.4);
+  --accent-glow: 0 20px 60px rgba(112, 111, 211, 0.35);
+  --accent-glow-strong: 0 10px 40px rgba(112, 111, 211, 0.45);
+  --accent-glow-soft: 0 0 16px rgba(112, 111, 211, 0.35);
+  --text-primary: #f3f4f6;
+  --text-secondary: #cbd5f5;
+  --text-muted: #9aa3bf;
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.145 0 0);
@@ -60,6 +173,8 @@
   --destructive-foreground: oklch(0.637 0.237 25.331);
   --border: oklch(0.269 0 0);
   --input: oklch(0.269 0 0);
+  --input-background: oklch(0.2 0 0);
+  --switch-background: oklch(0.35 0 0);
   --ring: oklch(0.439 0 0);
   --font-weight-medium: 500;
   --font-weight-normal: 400;
@@ -77,6 +192,7 @@
   --sidebar-border: oklch(0.269 0 0);
   --sidebar-ring: oklch(0.439 0 0);
 }
+
 
 @theme inline {
   --color-background: var(--background);
@@ -124,13 +240,38 @@
     @apply border-border outline-ring/50;
   }
 
+  html,
   body {
-    @apply bg-background text-foreground;
+    height: 100%;
+    background: var(--app-bg);
+    overscroll-behavior: none;
   }
+
+  body {
+    @apply text-foreground;
+    margin: 0;
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+  }
+
+  #root {
+    min-height: 100%;
+    background: var(--app-bg);
+  }
+
   
   /* Telegram Mini App styles */
   .safe-bottom {
     padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .safe-top {
+    padding-top: var(--tg-safe-top, 0px);
+  }
+
+  .safe-top-header {
+    padding-top: 0;
   }
   
   .scrollbar-hide::-webkit-scrollbar {

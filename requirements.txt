@@ -7,3 +7,4 @@ selenium==4.16.0
 webdriver-manager==4.0.1
 seleniumbase==4.*
 rapidfuzz==3.9.7
+pytest==8.3.2

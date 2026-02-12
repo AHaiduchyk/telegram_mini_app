@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Dict, Iterable, List, Optional, Tuple
@@ -79,6 +80,9 @@ ETALONS: List[Tuple[str, Tuple[str, ...]]] = [
 
 OTHER_PATH = ("покупки", "інші", "інші")
 
+CATEGORY_CACHE_TTL_SECONDS = 300
+_CATEGORY_CACHE: Dict[str, object] = {"timestamp": 0.0, "path_to_id": None, "id_to_path": None}
+
 
 @dataclass
 class CategoryResult:
@@ -119,6 +123,13 @@ def product_key(value: str) -> str:
 
 
 def build_category_maps(session: Session) -> Tuple[Dict[Tuple[str, ...], int], Dict[int, List[str]]]:
+    cached_at = _CATEGORY_CACHE.get("timestamp", 0.0) or 0.0
+    if time.time() - cached_at < CATEGORY_CACHE_TTL_SECONDS:
+        cached_path_to_id = _CATEGORY_CACHE.get("path_to_id")
+        cached_id_to_path = _CATEGORY_CACHE.get("id_to_path")
+        if isinstance(cached_path_to_id, dict) and isinstance(cached_id_to_path, dict):
+            return cached_path_to_id, cached_id_to_path
+
     rows = session.exec(select(Category)).all()
     by_id: Dict[int, Category] = {c.id: c for c in rows if c.id is not None}
     path_to_id: Dict[Tuple[str, ...], int] = {}
@@ -138,6 +149,10 @@ def build_category_maps(session: Session) -> Tuple[Dict[Tuple[str, ...], int], D
         path_tuple = tuple(path)
         path_to_id[path_tuple] = cat_id
         id_to_path[cat_id] = path
+
+    _CATEGORY_CACHE["timestamp"] = time.time()
+    _CATEGORY_CACHE["path_to_id"] = path_to_id
+    _CATEGORY_CACHE["id_to_path"] = id_to_path
 
     return path_to_id, id_to_path
 
@@ -217,6 +232,7 @@ def get_or_predict_category_cached(
     session: Session,
     raw_name: str,
     path_to_id: Dict[Tuple[str, ...], int],
+    commit: bool = True,
 ) -> CategoryResult:
     key = product_key(raw_name)
     if not key:
@@ -242,6 +258,7 @@ def get_or_predict_category_cached(
             confidence=confidence,
             method="rule",
             example_name=raw_name,
+            commit=commit,
         )
         return CategoryResult(key=key, category_id=category_id, confidence=confidence, method="rule")
 
@@ -260,6 +277,7 @@ def get_or_predict_category_cached(
             confidence=confidence,
             method="fuzzy",
             example_name=raw_name,
+            commit=commit,
         )
     return CategoryResult(key=key, category_id=category_id, confidence=confidence, method="fuzzy")
 
@@ -283,6 +301,7 @@ def _cache_category(
     confidence: float,
     method: str,
     example_name: Optional[str],
+    commit: bool = True,
 ) -> None:
     if category_id is None:
         return
@@ -295,23 +314,28 @@ def _cache_category(
         updated_at=datetime.utcnow(),
     )
     session.add(row)
-    session.commit()
+    if commit and session.new:
+        session.commit()
 
 
 def annotate_items_with_categories(
     session: Session,
     items: List[Dict[str, object]],
 ) -> List[Dict[str, object]]:
+    path_to_id, id_to_path = build_category_maps(session)
     out: List[Dict[str, object]] = []
     for item in items:
         name = str(item.get("name") or "").strip()
         if not name:
             out.append(item)
             continue
-        cat = categorize_item_name(session, name)
+        result = get_or_predict_category_cached(session, name, path_to_id, commit=False)
+        path = id_to_path.get(result.category_id or -1, list(OTHER_PATH))
         enriched = dict(item)
-        enriched["category_path"] = cat.category_path
-        enriched["category_confidence"] = cat.confidence
-        enriched["category_method"] = cat.method
+        enriched["category_path"] = path
+        enriched["category_confidence"] = result.confidence
+        enriched["category_method"] = result.method
         out.append(enriched)
+    if session.new:
+        session.commit()
     return out

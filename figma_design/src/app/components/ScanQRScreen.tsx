@@ -21,6 +21,7 @@ export function ScanQRScreen({ onBack }: ScanQRScreenProps) {
   const lastScanRef = useRef<{ text: string; at: number } | null>(null);
   const autoStartRef = useRef(false);
   const scanResultRef = useRef<ScanResult | null>(null);
+  const scanStatusRef = useRef<ScanStatus>('idle');
   const [scanStatus, setScanStatus] = useState<ScanStatus>('idle');
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -28,12 +29,51 @@ export function ScanQRScreen({ onBack }: ScanQRScreenProps) {
   const [savingExpense, setSavingExpense] = useState(false);
   const [showDuplicatePrompt, setShowDuplicatePrompt] = useState(false);
   const [duplicateCount, setDuplicateCount] = useState(0);
+  const [isPremium, setIsPremium] = useState(false);
 
   const apiBase = import.meta.env?.VITE_API_BASE?.replace(/\/$/, '') ?? '';
+
+  const showPremiumOnly = useCallback(() => {
+    const tg = tgRef.current;
+    if (tg?.showPopup) {
+      tg.showPopup({
+        title: 'Premium',
+        message: 'This feature is available for premium users only.',
+        buttons: [{ id: 'ok', type: 'ok', text: 'OK' }],
+      });
+      return;
+    }
+    window.alert('This feature is available for premium users only.');
+  }, []);
+
+  const logClient = useCallback(
+    async (event: string, data?: Record<string, unknown>) => {
+      try {
+        const tg = tgRef.current;
+        await fetch(`${apiBase}/api/client_log`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            event,
+            data,
+            user_agent: navigator.userAgent,
+            url: window.location.href,
+            timestamp: new Date().toISOString(),
+            init_data: tg?.initData ?? null,
+            init_data_unsafe: tg?.initDataUnsafe ?? null,
+          }),
+        });
+      } catch {
+        // Ignore logging failures.
+      }
+    },
+    [apiBase],
+  );
 
   const submitScan = useCallback(
     async (rawText: string) => {
       const tg = tgRef.current;
+      await logClient('scan_submit_request', { raw_text_len: rawText.length });
       const payload = {
         raw_text: rawText,
         init_data: tg?.initData ?? null,
@@ -47,12 +87,13 @@ export function ScanQRScreen({ onBack }: ScanQRScreenProps) {
       });
 
       if (!res.ok) {
+        await logClient('scan_submit_failed', { status: res.status });
         throw new Error('Failed to store scan.');
       }
 
       return res.json();
     },
-    [apiBase],
+    [apiBase, logClient],
   );
 
   const handleQrText = useCallback(
@@ -68,6 +109,7 @@ export function ScanQRScreen({ onBack }: ScanQRScreenProps) {
       setError(null);
 
       try {
+        await logClient('scan_submit_start', { raw_text_len: rawText.length });
         const scan = await submitScan(rawText);
         const info = scan?.info || {};
         const amountRaw = info?.sm ?? info?.amount ?? null;
@@ -80,11 +122,15 @@ export function ScanQRScreen({ onBack }: ScanQRScreenProps) {
           merchant: info.merchant,
           date: info.date,
         });
-        if (tgRef.current?.sendData) {
-          tgRef.current.sendData(rawText);
-        }
         setScanStatus('success');
+        await logClient('scan_submit_success', {
+          check_id: info.check_id || info.id || null,
+          has_amount: Boolean(amountText),
+        });
       } catch (err) {
+        await logClient('scan_submit_error', {
+          message: err instanceof Error ? err.message : 'Failed to store scan.',
+        });
         setError(err instanceof Error ? err.message : 'Failed to store scan.');
         setScanStatus('error');
       } finally {
@@ -131,6 +177,7 @@ export function ScanQRScreen({ onBack }: ScanQRScreenProps) {
         });
 
         if (res.status === 409) {
+          await logClient('expense_conflict', { status: 409 });
           const body = await res.json();
           const count = body?.detail?.existing_count ?? 1;
           setDuplicateCount(count);
@@ -139,6 +186,7 @@ export function ScanQRScreen({ onBack }: ScanQRScreenProps) {
         }
 
         if (!res.ok) {
+          await logClient('expense_save_failed', { status: res.status });
           throw new Error('Failed to save expense.');
         }
 
@@ -158,6 +206,10 @@ export function ScanQRScreen({ onBack }: ScanQRScreenProps) {
   }, [scanResult]);
 
   useEffect(() => {
+    scanStatusRef.current = scanStatus;
+  }, [scanStatus]);
+
+  useEffect(() => {
     const tg = (window as any)?.Telegram?.WebApp || null;
     tgRef.current = tg;
 
@@ -167,23 +219,52 @@ export function ScanQRScreen({ onBack }: ScanQRScreenProps) {
       return;
     }
 
+    const loadProfile = async () => {
+      const params = new URLSearchParams();
+      if (tg.initData) params.set('init_data', tg.initData);
+      if (tg.initDataUnsafe) params.set('init_data_unsafe', JSON.stringify(tg.initDataUnsafe));
+      try {
+        const res = await fetch(`${apiBase}/api/user_profile?${params.toString()}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const premium = Boolean(data.is_premium);
+        setIsPremium(premium);
+        if (!premium) {
+          setScanEnabled(false);
+          setError('This feature is available for premium users only.');
+        }
+      } catch {}
+    };
+    loadProfile();
+
     tg.ready?.();
     tg.expand?.();
+    logClient('scan_screen_open', {
+      platform: tg.platform,
+      version: tg.version,
+      supports_scan: Boolean(tg.showScanQrPopup),
+    });
 
     if (!tg.showScanQrPopup) {
       setScanEnabled(false);
       setError('QR scanning is not supported in this Telegram version.');
+      logClient('scan_not_supported', { platform: tg.platform, version: tg.version });
       return;
     }
 
     const handler = (event: any) => {
       if (event?.data) {
+        logClient('qr_text_received', { raw_text_len: String(event.data).length });
         handleQrText(event.data);
       }
     };
 
     tg.onEvent?.('qrTextReceived', handler);
     const closedHandler = () => {
+      logClient('scan_popup_closed', {
+        status: scanStatusRef.current,
+        has_result: Boolean(scanResultRef.current),
+      });
       setScanStatus((current) => {
         if (current === 'scanning' && !scanResultRef.current) {
           onBack();
@@ -193,18 +274,39 @@ export function ScanQRScreen({ onBack }: ScanQRScreenProps) {
     };
     tg.onEvent?.('scanQrPopupClosed', closedHandler);
 
+    const onVisibility = () => {
+      logClient('visibility_change', { state: document.visibilityState });
+    };
+    const onPageHide = () => {
+      logClient('page_hide', { state: document.visibilityState });
+    };
+    const onPageShow = () => {
+      logClient('page_show', { state: document.visibilityState });
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', onPageHide);
+    window.addEventListener('pageshow', onPageShow);
+
     return () => {
       tg.offEvent?.('qrTextReceived', handler);
       tg.offEvent?.('scanQrPopupClosed', closedHandler);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', onPageHide);
+      window.removeEventListener('pageshow', onPageShow);
     };
-  }, [handleQrText, onBack]);
+  }, [handleQrText, logClient, onBack]);
 
   const handleScan = () => {
+    if (!isPremium) {
+      showPremiumOnly();
+      return;
+    }
     if (!scanEnabled || scanStatus === 'saving') {
       return;
     }
     setError(null);
     setScanStatus('scanning');
+    logClient('scan_popup_open', { status: scanStatusRef.current });
     tgRef.current?.showScanQrPopup?.({
       text: 'Point your camera at a QR code.',
     });
@@ -294,7 +396,7 @@ export function ScanQRScreen({ onBack }: ScanQRScreenProps) {
 
             {/* Scanning Line */}
             <div className="absolute inset-x-0 top-1/2 -translate-y-1/2">
-              <div className="h-1 bg-[#706fd3] animate-pulse shadow-lg shadow-[0_0_16px_rgba(112,111,211,0.5)]"></div>
+              <div className="h-1 bg-[var(--accent-from)] animate-pulse shadow-lg shadow-[var(--accent-glow-soft)]"></div>
             </div>
 
             {/* QR Code Icon */}
@@ -322,7 +424,7 @@ export function ScanQRScreen({ onBack }: ScanQRScreenProps) {
         {/* Scan Result Modal */}
         {hasSuccess && (
           <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 z-20">
-            <div className="bg-white/95 backdrop-blur-xl rounded-3xl p-6 shadow-[0_20px_60px_rgba(112,111,211,0.35)] border border-white/60 animate-in fade-in slide-in-from-bottom-4">
+            <div className="bg-white/95 backdrop-blur-xl rounded-3xl p-6 shadow-[var(--accent-glow)] border border-white/60 animate-in fade-in slide-in-from-bottom-4">
               <div className="text-center mb-4">
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
                   <span className="text-3xl">✓</span>
@@ -355,7 +457,7 @@ export function ScanQRScreen({ onBack }: ScanQRScreenProps) {
               <button
                 onClick={handleConfirm}
                 disabled={savingExpense}
-                className="w-full py-3 bg-[#706fd3] text-white rounded-xl font-medium hover:bg-[#5956b8] transition-all mb-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                className="w-full py-3 bg-[var(--accent-from)] text-white rounded-xl font-medium hover:bg-[var(--accent-to)] transition-all mb-2 disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {savingExpense ? 'Saving...' : 'Add Transaction'}
               </button>
@@ -381,7 +483,7 @@ export function ScanQRScreen({ onBack }: ScanQRScreenProps) {
               <div className="flex gap-3">
                 <button
                   onClick={handleConfirmDuplicate}
-                  className="flex-1 py-2.5 bg-[#706fd3] text-white rounded-xl font-medium hover:bg-[#5956b8] transition-all"
+                  className="flex-1 py-2.5 bg-[var(--accent-from)] text-white rounded-xl font-medium hover:bg-[var(--accent-to)] transition-all"
                 >
                   Так
                 </button>

@@ -28,3 +28,4 @@ export_items_csv.py
 figma_design/dist/
 figma_design/node_modules/*
 figma_new_design/*
+.vscode/sessions.json
